@@ -1,0 +1,30 @@
+stages:
+  - test
+  - build
+  - deploy
+
+test:
+  stage: test
+  script:
+    - echo "Running tests..."
+    - echo "Test passed"
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+
+build:
+  stage: build
+  script:
+    - echo "Building..."
+  needs:
+    - test
+  rules:
+    - if: $CI_COMMIT_BRANCH == "main"
+
+deploy:
+  stage: deploy
+  script:
+    - echo "Deploying..."
+  environment:
+    name: production
+  rules:
+    - if: $CI_COMMIT_BRANCH == "main"
