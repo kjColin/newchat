@@ -19,7 +19,21 @@ export type Message = {
   };
   replyTo?: MessageReference | null;
   forwardFrom?: MessageReference | null;
+  attachments?: Attachment[];
   reactions?: MessageReaction[];
+};
+
+export type Attachment = {
+  id: string;
+  messageId?: string | null;
+  uploaderId: string;
+  kind: 'image' | 'video' | 'audio' | 'file' | string;
+  fileName: string;
+  mimeType: string;
+  size: number;
+  url: string;
+  thumbnailUrl?: string | null;
+  createdAt: string;
 };
 
 export type MessageReference = {

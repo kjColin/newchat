@@ -1,11 +1,14 @@
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
+import express from 'express';
+import { join } from 'path';
 import { AppModule } from './app.module';
 import { GlobalExceptionFilter } from './common/http-exception.filter';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   app.getHttpAdapter().getInstance().set('trust proxy', 2);
+  app.use('/uploads', express.static(join(process.cwd(), 'uploads')));
   app.setGlobalPrefix('api');
 
   app.enableCors({

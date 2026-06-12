@@ -20,6 +20,7 @@ pnpm-debug.log*
 
 # Runtime and local data
 backups/
+uploads/
 *.sqlite
 *.sqlite3
 *.bak

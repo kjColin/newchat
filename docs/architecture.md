@@ -385,7 +385,7 @@ Client selects file
        └─ emit message with attachment metadata
 ```
 
-本地开发可先存文件系统，生产建议使用 S3 兼容对象存储。
+当前实现先使用后端本地 `uploads/` 目录保存文件，并通过 `/uploads/...` 静态路径访问；生产建议迁移到 S3 兼容对象存储，并保留数据库中的附件元数据。
 
 ## 10. 安全设计
 

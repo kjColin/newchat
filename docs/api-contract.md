@@ -166,6 +166,16 @@
       "content": "string",
       "type": "text|image|file",
       "createdAt": "timestamp",
+      "attachments": [
+        {
+          "id": "uuid",
+          "kind": "image|video|audio|file",
+          "fileName": "name.png",
+          "mimeType": "image/png",
+          "size": 12345,
+          "url": "/uploads/2026-06-13/file.png"
+        }
+      ],
       "replyTo": {
         "id": "uuid",
         "content": "string",
@@ -193,7 +203,8 @@
   "type": "text",
   "clientId": "optional-client-id",
   "replyToId": "uuid|null",
-  "forwardFromId": "uuid|null"
+  "forwardFromId": "uuid|null",
+  "attachmentIds": ["attachment-id"]
 }
 ```
 
@@ -205,6 +216,7 @@
   "conversationId": "uuid",
   "senderId": "uuid",
   "content": "string",
+  "attachments": [],
   "createdAt": "timestamp"
 }
 ```
@@ -231,6 +243,31 @@
   "clientId": "optional-client-id"
 }
 ```
+
+---
+
+## 文件 API
+
+### POST /api/files
+上传一个附件，使用 `multipart/form-data`，字段名为 `file`。
+
+当前实现将文件保存到后端本地 `uploads/` 目录，并通过 `/uploads/...` URL 访问。生产环境建议迁移到对象存储。
+
+**Response** (201)
+```json
+{
+  "id": "uuid",
+  "uploaderId": "uuid",
+  "kind": "image|video|audio|file",
+  "fileName": "name.png",
+  "mimeType": "image/png",
+  "size": 12345,
+  "url": "/uploads/2026-06-13/file.png",
+  "createdAt": "timestamp"
+}
+```
+
+上传后发送消息时将附件 id 放入 `attachmentIds`。
 
 ---
 

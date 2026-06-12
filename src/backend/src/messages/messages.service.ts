@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, ForbiddenException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, ForbiddenException, BadRequestException, InternalServerErrorException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { MessagesGateway } from './messages.gateway';
 import { CreateMessageDto } from './dto/message.dto';
@@ -11,8 +11,9 @@ export class MessagesService {
   ) {}
 
   async create(conversationId: string, senderId: string, data: CreateMessageDto) {
-    const nextContent = data.content.trim();
-    if (!nextContent) throw new BadRequestException('Message cannot be empty');
+    const nextContent = data.content?.trim() || '';
+    const attachmentIds = [...new Set(data.attachmentIds || [])];
+    if (!nextContent && attachmentIds.length === 0) throw new BadRequestException('Message cannot be empty');
 
     // 验证用户是该会话参与者
     await this.ensureParticipant(conversationId, senderId);
@@ -43,6 +44,21 @@ export class MessagesService {
       if (forwardFrom.deletedAt) throw new BadRequestException('Cannot forward deleted message');
     }
 
+    if (attachmentIds.length > 0) {
+      const ownedAttachments = await this.prisma.attachment.findMany({
+        where: {
+          id: { in: attachmentIds },
+          uploaderId: senderId,
+          messageId: null,
+        },
+        select: { id: true },
+      });
+
+      if (ownedAttachments.length !== attachmentIds.length) {
+        throw new BadRequestException('Invalid attachment');
+      }
+    }
+
     const message = await this.prisma.$transaction(async prisma => {
       const created = await prisma.message.create({
         data: {
@@ -57,6 +73,17 @@ export class MessagesService {
         include: this.messageInclude(),
       });
 
+      if (attachmentIds.length > 0) {
+        await prisma.attachment.updateMany({
+          where: {
+            id: { in: attachmentIds },
+            uploaderId: senderId,
+            messageId: null,
+          },
+          data: { messageId: created.id },
+        });
+      }
+
       await prisma.conversation.update({
         where: { id: conversationId },
         data: { updatedAt: new Date() },
@@ -67,7 +94,16 @@ export class MessagesService {
         data: { lastReadAt: new Date(), archivedAt: null },
       });
 
-      return created;
+      const messageWithAttachments = await prisma.message.findUnique({
+        where: { id: created.id },
+        include: this.messageInclude(),
+      });
+
+      if (!messageWithAttachments) {
+        throw new InternalServerErrorException('Message was not created');
+      }
+
+      return messageWithAttachments;
     });
 
     this.messagesGateway.emitMessage(message);
@@ -281,6 +317,9 @@ export class MessagesService {
           deletedAt: true,
           sender: { select: { id: true, username: true, avatar: true } },
         },
+      },
+      attachments: {
+        orderBy: { createdAt: 'asc' as const },
       },
       reactions: {
         include: {

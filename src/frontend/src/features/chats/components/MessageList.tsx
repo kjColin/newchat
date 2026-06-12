@@ -32,6 +32,12 @@ function aggregateReactions(message: Message, currentUserId: string) {
   return Array.from(counts.entries()).map(([emoji, value]) => ({ emoji, ...value }));
 }
 
+function formatFileSize(size: number) {
+  if (size < 1024) return `${size} B`;
+  if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`;
+  return `${(size / 1024 / 1024).toFixed(1)} MB`;
+}
+
 export function MessageList({
   currentUser,
   messages,
@@ -84,6 +90,22 @@ export function MessageList({
                 </span>
               )}
               <span className="message-content">{deleted ? 'Message deleted' : message.content}</span>
+              {!deleted && (message.attachments || []).length > 0 && (
+                <span className="message-attachments">
+                  {message.attachments?.map(attachment => (
+                    attachment.kind === 'image' ? (
+                      <a className="image-attachment" key={attachment.id} href={attachment.url} target="_blank" rel="noreferrer">
+                        <img src={attachment.url} alt={attachment.fileName} />
+                      </a>
+                    ) : (
+                      <a className="file-attachment" key={attachment.id} href={attachment.url} target="_blank" rel="noreferrer">
+                        <strong>{attachment.fileName}</strong>
+                        <small>{formatFileSize(attachment.size)}</small>
+                      </a>
+                    )
+                  ))}
+                </span>
+              )}
               <time>{message.editedAt && !deleted ? 'edited ' : ''}{formatMessageTime(message.createdAt)}</time>
             </div>
             {!deleted && (

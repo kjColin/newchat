@@ -1,5 +1,17 @@
 import { Type } from 'class-transformer';
-import { IsIn, IsInt, IsISO8601, IsNotEmpty, IsOptional, IsString, Max, MaxLength, Min } from 'class-validator';
+import {
+  ArrayMaxSize,
+  IsArray,
+  IsIn,
+  IsInt,
+  IsISO8601,
+  IsNotEmpty,
+  IsOptional,
+  IsString,
+  Max,
+  MaxLength,
+  Min,
+} from 'class-validator';
 
 export class CreateMessageDto {
   @IsString()
@@ -7,7 +19,7 @@ export class CreateMessageDto {
   conversationId: string;
 
   @IsString()
-  @IsNotEmpty()
+  @IsOptional()
   @MaxLength(4000)
   content: string;
 
@@ -27,6 +39,12 @@ export class CreateMessageDto {
   @IsOptional()
   @IsString()
   forwardFromId?: string;
+
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(10)
+  @IsString({ each: true })
+  attachmentIds?: string[];
 }
 
 export class EditMessageDto {

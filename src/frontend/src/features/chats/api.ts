@@ -1,5 +1,5 @@
 import { apiClient } from '../../shared/api/client';
-import type { Conversation, GroupMember, Message, MessageSearchResponse, MessagesResponse } from './types';
+import type { Attachment, Conversation, GroupMember, Message, MessageSearchResponse, MessagesResponse } from './types';
 
 export async function getConversations() {
   const { data } = await apiClient.get<Conversation[]>('/conversations');
@@ -32,12 +32,22 @@ export async function getMessages(
 export async function sendMessage(
   conversationId: string,
   content: string,
-  options: { clientId?: string; replyToId?: string; forwardFromId?: string } = {},
+  options: { clientId?: string; replyToId?: string; forwardFromId?: string; attachmentIds?: string[]; type?: string } = {},
 ) {
   const { data } = await apiClient.post<Message>('/messages', {
     conversationId,
     content,
     ...options,
+  });
+  return data;
+}
+
+export async function uploadFile(file: File) {
+  const formData = new FormData();
+  formData.append('file', file);
+
+  const { data } = await apiClient.post<Attachment>('/files', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
   });
   return data;
 }

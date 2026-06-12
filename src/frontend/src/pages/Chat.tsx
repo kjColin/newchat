@@ -20,6 +20,7 @@ import {
   toggleReaction,
   updateConversationSettings,
   updateGroup,
+  uploadFile,
 } from '../features/chats/api';
 import { ChatHeader } from '../features/chats/components/ChatHeader';
 import { ConversationDetails } from '../features/chats/components/ConversationDetails';
@@ -28,7 +29,7 @@ import { MessageComposer } from '../features/chats/components/MessageComposer';
 import { MessageList } from '../features/chats/components/MessageList';
 import { connectChatSocket, joinConversation, startTyping, stopTyping } from '../features/chats/socket';
 import type { ChatSocket } from '../features/chats/socket';
-import type { Conversation, GroupMember, Message } from '../features/chats/types';
+import type { Attachment, Conversation, GroupMember, Message } from '../features/chats/types';
 import { CreateGroupModal } from '../features/groups/components/CreateGroupModal';
 import { searchUsers } from '../features/users/api';
 import type { SearchUser } from '../features/users/types';
@@ -63,6 +64,7 @@ export function ChatPage() {
   const [draft, setDraft] = useState('');
   const [editingMessage, setEditingMessage] = useState<Message | null>(null);
   const [replyToMessage, setReplyToMessage] = useState<Message | null>(null);
+  const [pendingAttachments, setPendingAttachments] = useState<Attachment[]>([]);
   const [socket, setSocket] = useState<ChatSocket | null>(null);
   const [loadingConversations, setLoadingConversations] = useState(true);
   const [loadingMessages, setLoadingMessages] = useState(false);
@@ -248,6 +250,7 @@ export function ChatPage() {
     setActiveConversation(conversation);
     setGroupNameDraft(conversation.name);
     setReplyToMessage(null);
+    setPendingAttachments([]);
     setMessageSearch('');
     setMessageSearchResults([]);
     setDetailsOpen(false);
@@ -273,7 +276,7 @@ export function ChatPage() {
 
   const handleSend = async () => {
     const content = draft.trim();
-    if (!activeConversation || !content) return;
+    if (!activeConversation || (!content && pendingAttachments.length === 0)) return;
 
     setSending(true);
     setMessageError('');
@@ -286,9 +289,12 @@ export function ChatPage() {
         ));
         setEditingMessage(null);
       } else {
+        const hasImage = pendingAttachments.some(attachment => attachment.kind === 'image');
         const message = await sendMessage(activeConversation.id, content, {
           clientId: createClientId(),
           replyToId: replyToMessage?.id,
+          attachmentIds: pendingAttachments.map(attachment => attachment.id),
+          type: pendingAttachments.length > 0 ? (hasImage ? 'image' : 'file') : 'text',
         });
         setMessages(prev => prev.some(existing => existing.id === message.id) ? prev : [...prev, message]);
         setConversations(prev => sortConversations(prev.map(conversation =>
@@ -297,6 +303,7 @@ export function ChatPage() {
             : conversation
         )));
         setReplyToMessage(null);
+        setPendingAttachments([]);
       }
       setDraft('');
     } catch (error: any) {
@@ -320,13 +327,34 @@ export function ChatPage() {
   const handleEdit = (message: Message) => {
     setEditingMessage(message);
     setReplyToMessage(null);
+    setPendingAttachments([]);
     setDraft(message.content);
   };
 
   const handleReply = (message: Message) => {
     setEditingMessage(null);
     setReplyToMessage(message);
+    setPendingAttachments([]);
     setDraft('');
+  };
+
+  const handleSelectFiles = async (files: FileList | null) => {
+    if (!files || files.length === 0) return;
+
+    setMessageError('');
+    setSending(true);
+    try {
+      const nextAttachments = await Promise.all(Array.from(files).slice(0, 10).map(file => uploadFile(file)));
+      setPendingAttachments(prev => [...prev, ...nextAttachments].slice(0, 10));
+    } catch (error: any) {
+      setMessageError(error.response?.data?.message || 'Could not upload file');
+    } finally {
+      setSending(false);
+    }
+  };
+
+  const removePendingAttachment = (attachmentId: string) => {
+    setPendingAttachments(prev => prev.filter(attachment => attachment.id !== attachmentId));
   };
 
   const handleForward = async (message: Message) => {
@@ -615,6 +643,7 @@ export function ChatPage() {
               sending={sending}
               editing={Boolean(editingMessage)}
               replyTo={replyToMessage}
+              attachments={pendingAttachments}
               onChange={handleDraftChange}
               onSend={handleSend}
               onCancelEdit={() => {
@@ -622,6 +651,8 @@ export function ChatPage() {
                 setDraft('');
               }}
               onCancelReply={() => setReplyToMessage(null)}
+              onSelectFiles={handleSelectFiles}
+              onRemoveAttachment={removePendingAttachment}
             />
           </>
         ) : (
