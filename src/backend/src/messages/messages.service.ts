@@ -10,6 +10,9 @@ export class MessagesService {
   ) {}
 
   async create(conversationId: string, senderId: string, content: string, type = 'text') {
+    const nextContent = content.trim();
+    if (!nextContent) throw new BadRequestException('Message cannot be empty');
+
     // 验证用户是该会话参与者
     const participant = await this.prisma.userConversation.findUnique({
       where: {
@@ -23,7 +26,7 @@ export class MessagesService {
 
     const message = await this.prisma.$transaction(async prisma => {
       const created = await prisma.message.create({
-        data: { conversationId, senderId, content, type },
+        data: { conversationId, senderId, content: nextContent, type },
         include: this.messageInclude(),
       });
 
@@ -44,7 +47,12 @@ export class MessagesService {
     return message;
   }
 
-  async findByConversation(conversationId: string, userId: string, limit = 50, before?: string) {
+  async findByConversation(
+    conversationId: string,
+    userId: string,
+    limit = 50,
+    cursor: { beforeCreatedAt?: string; beforeId?: string; before?: string } = {},
+  ) {
     // 验证权限
     const participant = await this.prisma.userConversation.findUnique({
       where: { userId_conversationId: { userId, conversationId } },
@@ -55,14 +63,33 @@ export class MessagesService {
     }
 
     const where: any = { conversationId };
-    if (before) {
-      where.id = { lt: before };
+    if (cursor.beforeCreatedAt && cursor.beforeId) {
+      const beforeDate = new Date(cursor.beforeCreatedAt);
+      where.OR = [
+        { createdAt: { lt: beforeDate } },
+        { createdAt: beforeDate, id: { lt: cursor.beforeId } },
+      ];
+    } else if (cursor.before) {
+      const beforeMessage = await this.prisma.message.findFirst({
+        where: { id: cursor.before, conversationId },
+        select: { id: true, createdAt: true },
+      });
+
+      if (beforeMessage) {
+        where.OR = [
+          { createdAt: { lt: beforeMessage.createdAt } },
+          { createdAt: beforeMessage.createdAt, id: { lt: beforeMessage.id } },
+        ];
+      }
     }
 
     const messages = await this.prisma.message.findMany({
       where,
-      orderBy: { createdAt: 'desc' },
-      take: limit,
+      orderBy: [
+        { createdAt: 'desc' },
+        { id: 'desc' },
+      ],
+      take: Math.min(Math.max(limit, 1), 100),
       include: this.messageInclude(),
     });
 

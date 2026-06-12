@@ -49,6 +49,9 @@ model Message {
   sender         User         @relation(fields: [senderId], references: [id])
   conversation   Conversation @relation(fields: [conversationId], references: [id])
   reactions      MessageReaction[]
+
+  @@index([conversationId, createdAt, id])
+  @@index([senderId, createdAt])
 }
 
 model MessageReaction {
@@ -89,6 +92,7 @@ model GroupMember {
   group     Group    @relation(fields: [groupId], references: [id])
 
   @@unique([userId, groupId])
+  @@index([groupId, role])
 }
 
 model UserConversation {
@@ -104,4 +108,5 @@ model UserConversation {
   conversation    Conversation @relation(fields: [conversationId], references: [id])
 
   @@id([userId, conversationId])
+  @@index([userId, archivedAt, pinnedAt])
 }

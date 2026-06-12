@@ -1,6 +1,7 @@
 import { Controller, Get, Post, Patch, Delete, Param, Query, Body, UseGuards, Request } from '@nestjs/common';
 import { MessagesService } from './messages.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { CreateMessageDto, EditMessageDto, GetMessagesQueryDto, ToggleReactionDto } from './dto/message.dto';
 
 @Controller('messages')
 @UseGuards(JwtAuthGuard)
@@ -8,12 +9,12 @@ export class MessagesController {
   constructor(private messagesService: MessagesService) {}
 
   @Post()
-  async create(@Request() req: any, @Body() body: { conversationId: string; content: string; type?: string }) {
+  async create(@Request() req: any, @Body() body: CreateMessageDto) {
     return this.messagesService.create(body.conversationId, req.user.userId, body.content, body.type);
   }
 
   @Patch(':messageId')
-  async edit(@Request() req: any, @Param('messageId') messageId: string, @Body() body: { content: string }) {
+  async edit(@Request() req: any, @Param('messageId') messageId: string, @Body() body: EditMessageDto) {
     return this.messagesService.edit(messageId, req.user.userId, body.content);
   }
 
@@ -23,7 +24,7 @@ export class MessagesController {
   }
 
   @Post(':messageId/reactions')
-  async react(@Request() req: any, @Param('messageId') messageId: string, @Body() body: { emoji: string }) {
+  async react(@Request() req: any, @Param('messageId') messageId: string, @Body() body: ToggleReactionDto) {
     return this.messagesService.toggleReaction(messageId, req.user.userId, body.emoji);
   }
 
@@ -35,15 +36,18 @@ export class MessagesController {
   @Get(':conversationId')
   async findByConversation(
     @Param('conversationId') conversationId: string,
-    @Query('limit') limit: string,
-    @Query('before') before: string,
+    @Query() query: GetMessagesQueryDto,
     @Request() req: any,
   ) {
     return this.messagesService.findByConversation(
       conversationId,
       req.user.userId,
-      parseInt(limit) || 50,
-      before,
+      query.limit || 50,
+      {
+        beforeCreatedAt: query.beforeCreatedAt,
+        beforeId: query.beforeId,
+        before: query.before,
+      },
     );
   }
 }

@@ -10,6 +10,7 @@ import {
 import { JwtService } from '@nestjs/jwt';
 import { Server, Socket } from 'socket.io';
 import { PrismaService } from '../prisma/prisma.service';
+import { getJwtSecret } from '../common/config';
 
 @WebSocketGateway({
   cors: {
@@ -26,6 +27,9 @@ export class MessagesGateway implements OnGatewayConnection, OnGatewayDisconnect
   @WebSocketServer()
   server: Server;
 
+  private readonly activeSocketsByUser = new Map<string, Set<string>>();
+  private readonly offlineTimers = new Map<string, NodeJS.Timeout>();
+
   constructor(
     private prisma: PrismaService,
     private jwtService: JwtService,
@@ -40,13 +44,10 @@ export class MessagesGateway implements OnGatewayConnection, OnGatewayDisconnect
       }
 
       const payload = await this.jwtService.verifyAsync(token, {
-        secret: process.env.JWT_SECRET || 'secret',
+        secret: getJwtSecret(),
       });
       client.data.userId = payload.sub;
-      await this.prisma.user.update({
-        where: { id: payload.sub },
-        data: { status: 'online', lastSeen: new Date() },
-      });
+      await this.markUserOnline(payload.sub, client.id);
 
       const conversations = await this.prisma.userConversation.findMany({
         where: { userId: payload.sub },
@@ -71,17 +72,7 @@ export class MessagesGateway implements OnGatewayConnection, OnGatewayDisconnect
     const userId = client.data.userId;
     if (!userId) return;
 
-    const lastSeen = new Date();
-    await this.prisma.user.update({
-      where: { id: userId },
-      data: { status: 'offline', lastSeen },
-    }).catch(() => undefined);
-
-    this.server?.emit('presence:update', {
-      userId,
-      status: 'offline',
-      lastSeen: lastSeen.toISOString(),
-    });
+    this.markSocketDisconnected(userId, client.id);
   }
 
   @SubscribeMessage('joinConversation')
@@ -172,5 +163,50 @@ export class MessagesGateway implements OnGatewayConnection, OnGatewayDisconnect
 
   private roomName(conversationId: string) {
     return `conversation:${conversationId}`;
+  }
+
+  private async markUserOnline(userId: string, socketId: string) {
+    const existingTimer = this.offlineTimers.get(userId);
+    if (existingTimer) {
+      clearTimeout(existingTimer);
+      this.offlineTimers.delete(userId);
+    }
+
+    const sockets = this.activeSocketsByUser.get(userId) || new Set<string>();
+    sockets.add(socketId);
+    this.activeSocketsByUser.set(userId, sockets);
+
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { status: 'online', lastSeen: new Date() },
+    });
+  }
+
+  private markSocketDisconnected(userId: string, socketId: string) {
+    const sockets = this.activeSocketsByUser.get(userId);
+    if (!sockets) return;
+
+    sockets.delete(socketId);
+    if (sockets.size > 0) return;
+
+    this.activeSocketsByUser.delete(userId);
+    const timer = setTimeout(async () => {
+      if (this.activeSocketsByUser.has(userId)) return;
+
+      const lastSeen = new Date();
+      await this.prisma.user.update({
+        where: { id: userId },
+        data: { status: 'offline', lastSeen },
+      }).catch(() => undefined);
+
+      this.server?.emit('presence:update', {
+        userId,
+        status: 'offline',
+        lastSeen: lastSeen.toISOString(),
+      });
+      this.offlineTimers.delete(userId);
+    }, 15000);
+
+    this.offlineTimers.set(userId, timer);
   }
 }

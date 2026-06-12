@@ -1,6 +1,7 @@
 import { Controller, Get, Patch, Body, UseGuards, Request, Query } from '@nestjs/common';
 import { UsersService } from './users.service';
 import { AuthGuard } from '@nestjs/passport';
+import { SearchUsersQueryDto, UpdateCurrentUserDto } from './dto/user.dto';
 
 @Controller('users')
 @UseGuards(AuthGuard('jwt'))
@@ -13,12 +14,12 @@ export class UsersController {
   }
 
   @Get('search')
-  async search(@Request() req: any, @Query('q') query = '') {
-    return this.usersService.search(query, req.user.userId);
+  async search(@Request() req: any, @Query() query: SearchUsersQueryDto) {
+    return this.usersService.search(query.q || '', req.user.userId);
   }
 
   @Patch('me')
-  async updateMe(@Request() req: any, @Body() data: { username?: string; avatar?: string }) {
+  async updateMe(@Request() req: any, @Body() data: UpdateCurrentUserDto) {
     return this.usersService.update(req.user.userId, data);
   }
 }

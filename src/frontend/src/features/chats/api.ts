@@ -2,7 +2,7 @@ import { apiClient } from '../../shared/api/client';
 import type { Conversation, GroupMember, Message, MessagesResponse } from './types';
 
 export async function getConversations() {
-  const { data } = await apiClient.get<Conversation[]>('/groups');
+  const { data } = await apiClient.get<Conversation[]>('/conversations');
   return data;
 }
 
@@ -15,12 +15,17 @@ export async function createGroup(name: string, memberIds: string[]) {
 }
 
 export async function createDirectConversation(userId: string) {
-  const { data } = await apiClient.post<Conversation>('/groups/direct', { userId });
+  const { data } = await apiClient.post<Conversation>('/conversations/direct', { userId });
   return data;
 }
 
-export async function getMessages(conversationId: string) {
-  const { data } = await apiClient.get<MessagesResponse>(`/messages/${conversationId}`);
+export async function getMessages(
+  conversationId: string,
+  cursor?: { beforeCreatedAt?: string; beforeId?: string; limit?: number },
+) {
+  const { data } = await apiClient.get<MessagesResponse>(`/messages/${conversationId}`, {
+    params: cursor,
+  });
   return data;
 }
 
@@ -56,7 +61,7 @@ export async function updateConversationSettings(
   conversationId: string,
   settings: { pinned?: boolean; muted?: boolean; archived?: boolean },
 ) {
-  const { data } = await apiClient.patch<Conversation[]>(`/groups/${conversationId}/settings`, settings);
+  const { data } = await apiClient.patch<Conversation[]>(`/conversations/${conversationId}/settings`, settings);
   return data;
 }
 
