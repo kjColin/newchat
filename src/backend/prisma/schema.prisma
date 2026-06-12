@@ -1,0 +1,107 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String    @id @default(uuid())
+  username      String    @unique
+  email         String    @unique
+  password      String
+  avatar        String?
+  status        String    @default("offline")
+  lastSeen      DateTime  @default(now())
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  messages      Message[]
+  memberships   GroupMember[]
+  conversations UserConversation[]
+  reactions     MessageReaction[]
+}
+
+model Conversation {
+  id           String    @id @default(uuid())
+  type         String    @default("direct") // direct, group
+  name         String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  messages     Message[]
+  participants UserConversation[]
+  group        Group?
+}
+
+model Message {
+  id             String       @id @default(uuid())
+  content        String
+  type           String       @default("text") // text, image, file
+  senderId       String
+  conversationId String
+  createdAt      DateTime     @default(now())
+  editedAt       DateTime?
+  deletedAt      DateTime?
+
+  sender         User         @relation(fields: [senderId], references: [id])
+  conversation   Conversation @relation(fields: [conversationId], references: [id])
+  reactions      MessageReaction[]
+}
+
+model MessageReaction {
+  id        String   @id @default(uuid())
+  emoji     String
+  userId    String
+  messageId String
+  createdAt DateTime @default(now())
+
+  user      User     @relation(fields: [userId], references: [id])
+  message   Message  @relation(fields: [messageId], references: [id])
+
+  @@unique([userId, messageId, emoji])
+  @@index([messageId])
+}
+
+model Group {
+  id          String   @id @default(uuid())
+  name        String
+  avatar      String?
+  ownerId     String
+  conversationId String @unique
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  conversation Conversation @relation(fields: [conversationId], references: [id])
+  members      GroupMember[]
+}
+
+model GroupMember {
+  id        String   @id @default(uuid())
+  userId    String
+  groupId   String
+  role      String   @default("member") // owner, admin, member
+  joinedAt  DateTime @default(now())
+
+  user      User     @relation(fields: [userId], references: [id])
+  group     Group    @relation(fields: [groupId], references: [id])
+
+  @@unique([userId, groupId])
+}
+
+model UserConversation {
+  userId          String
+  conversationId  String
+  lastReadAt      DateTime?
+  pinnedAt        DateTime?
+  mutedUntil      DateTime?
+  archivedAt      DateTime?
+  addedAt         DateTime   @default(now())
+
+  user            User       @relation(fields: [userId], references: [id])
+  conversation    Conversation @relation(fields: [conversationId], references: [id])
+
+  @@id([userId, conversationId])
+}

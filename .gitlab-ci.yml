@@ -3,28 +3,33 @@ stages:
   - build
   - deploy
 
-test:
-  stage: test
-  script:
-    - echo "Running tests..."
-    - echo "Test passed"
-  rules:
-    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
-
-build:
+backend_build:
   stage: build
+  image: node:20
+  cache:
+    key: backend-${CI_COMMIT_REF_SLUG}
+    paths:
+      - src/backend/.npm/
   script:
-    - echo "Building..."
-  needs:
-    - test
-  rules:
-    - if: $CI_COMMIT_BRANCH == "main"
+    - cd src/backend
+    - npm ci --cache .npm --prefer-offline
+    - npm run build
+
+frontend_build:
+  stage: build
+  image: node:20
+  cache:
+    key: frontend-${CI_COMMIT_REF_SLUG}
+    paths:
+      - src/frontend/.npm/
+  script:
+    - cd src/frontend
+    - npm ci --cache .npm --prefer-offline
+    - npm run build
 
 deploy:
   stage: deploy
   script:
-    - echo "Deploying..."
-  environment:
-    name: production
-  rules:
-    - if: $CI_COMMIT_BRANCH == "main"
+    - echo "Deploy is handled by the production host"
+  only:
+    - main
