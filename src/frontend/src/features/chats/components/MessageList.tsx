@@ -1,4 +1,4 @@
-import { Edit3, MessageCircle, Trash2 } from 'lucide-react';
+import { CornerUpLeft, Edit3, Forward, MessageCircle, Trash2 } from 'lucide-react';
 import type { RefObject } from 'react';
 import { formatMessageTime } from '../../../shared/utils/time';
 import type { User } from '../../auth/types';
@@ -13,6 +13,8 @@ type MessageListProps = {
   onEdit: (message: Message) => void;
   onDelete: (message: Message) => void;
   onReact: (message: Message, emoji: string) => void;
+  onReply: (message: Message) => void;
+  onForward: (message: Message) => void;
 };
 
 const quickReactions = ['👍', '❤️', '😂', '😮'];
@@ -30,7 +32,18 @@ function aggregateReactions(message: Message, currentUserId: string) {
   return Array.from(counts.entries()).map(([emoji, value]) => ({ emoji, ...value }));
 }
 
-export function MessageList({ currentUser, messages, loading, error, bottomRef, onEdit, onDelete, onReact }: MessageListProps) {
+export function MessageList({
+  currentUser,
+  messages,
+  loading,
+  error,
+  bottomRef,
+  onEdit,
+  onDelete,
+  onReact,
+  onReply,
+  onForward,
+}: MessageListProps) {
   if (loading) {
     return <div className="message-state">Loading messages...</div>;
   }
@@ -55,10 +68,22 @@ export function MessageList({ currentUser, messages, loading, error, bottomRef, 
         const deleted = Boolean(message.deletedAt);
         const reactions = aggregateReactions(message, currentUser.id);
         return (
-          <div className={`message-row ${isOwn ? 'own' : ''} ${deleted ? 'deleted' : ''}`} key={message.id}>
+          <div id={`message-${message.id}`} className={`message-row ${isOwn ? 'own' : ''} ${deleted ? 'deleted' : ''}`} key={message.id}>
             {!isOwn && <span className="message-author">{message.sender?.username}</span>}
             <div className="message-bubble">
-              <span>{deleted ? 'Message deleted' : message.content}</span>
+              {message.replyTo && !deleted && (
+                <span className="message-reference">
+                  <strong>{message.replyTo.sender?.username || 'Message'}</strong>
+                  {message.replyTo.deletedAt ? 'Message deleted' : message.replyTo.content}
+                </span>
+              )}
+              {message.forwardFrom && !deleted && (
+                <span className="message-reference">
+                  <strong>Forwarded from {message.forwardFrom.sender?.username || 'unknown'}</strong>
+                  {message.forwardFrom.deletedAt ? 'Message deleted' : message.forwardFrom.content}
+                </span>
+              )}
+              <span className="message-content">{deleted ? 'Message deleted' : message.content}</span>
               <time>{message.editedAt && !deleted ? 'edited ' : ''}{formatMessageTime(message.createdAt)}</time>
             </div>
             {!deleted && (
@@ -66,6 +91,8 @@ export function MessageList({ currentUser, messages, loading, error, bottomRef, 
                 {quickReactions.map(emoji => (
                   <button type="button" key={emoji} onClick={() => onReact(message, emoji)}>{emoji}</button>
                 ))}
+                <button type="button" onClick={() => onReply(message)} title="Reply"><CornerUpLeft size={13} /></button>
+                <button type="button" onClick={() => onForward(message)} title="Forward"><Forward size={13} /></button>
                 {isOwn && (
                   <>
                     <button type="button" onClick={() => onEdit(message)} title="Edit"><Edit3 size={13} /></button>

@@ -1,22 +1,45 @@
-import { SendHorizontal } from 'lucide-react';
+import { SendHorizontal, X } from 'lucide-react';
+import type { Message } from '../types';
 
 type MessageComposerProps = {
   value: string;
   disabled: boolean;
   sending: boolean;
   editing: boolean;
+  replyTo: Message | null;
   onChange: (value: string) => void;
   onSend: () => void;
   onCancelEdit: () => void;
+  onCancelReply: () => void;
 };
 
-export function MessageComposer({ value, disabled, sending, editing, onChange, onSend, onCancelEdit }: MessageComposerProps) {
+export function MessageComposer({
+  value,
+  disabled,
+  sending,
+  editing,
+  replyTo,
+  onChange,
+  onSend,
+  onCancelEdit,
+  onCancelReply,
+}: MessageComposerProps) {
   return (
-    <footer className={`composer-wrap ${editing ? 'is-editing' : ''}`}>
+    <footer className={`composer-wrap ${editing ? 'is-editing' : ''} ${replyTo ? 'is-replying' : ''}`}>
       {editing && (
         <div className="editing-strip">
           <span>Editing message</span>
           <button type="button" onClick={onCancelEdit}>Cancel</button>
+        </div>
+      )}
+      {!editing && replyTo && (
+        <div className="editing-strip">
+          <span>
+            Replying to <strong>{replyTo.sender?.username || 'message'}</strong>: {replyTo.content}
+          </span>
+          <button type="button" onClick={onCancelReply} aria-label="Cancel reply" title="Cancel reply">
+            <X size={14} />
+          </button>
         </div>
       )}
       <div className="message-composer">

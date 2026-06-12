@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException, ForbiddenException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { MessagesGateway } from './messages.gateway';
+import { CreateMessageDto } from './dto/message.dto';
 
 @Injectable()
 export class MessagesService {
@@ -9,24 +10,50 @@ export class MessagesService {
     private messagesGateway: MessagesGateway,
   ) {}
 
-  async create(conversationId: string, senderId: string, content: string, type = 'text') {
-    const nextContent = content.trim();
+  async create(conversationId: string, senderId: string, data: CreateMessageDto) {
+    const nextContent = data.content.trim();
     if (!nextContent) throw new BadRequestException('Message cannot be empty');
 
     // 验证用户是该会话参与者
-    const participant = await this.prisma.userConversation.findUnique({
-      where: {
-        userId_conversationId: { userId: senderId, conversationId },
-      },
-    });
+    await this.ensureParticipant(conversationId, senderId);
 
-    if (!participant) {
-      throw new ForbiddenException('Not in conversation');
+    if (data.clientId) {
+      const existing = await this.prisma.message.findUnique({
+        where: {
+          senderId_clientId: {
+            senderId,
+            clientId: data.clientId,
+          },
+        },
+        include: this.messageInclude(),
+      });
+      if (existing) return existing;
+    }
+
+    if (data.replyToId) {
+      const replyTo = await this.findMessageWithAccess(data.replyToId, senderId);
+      if (replyTo.conversationId !== conversationId) {
+        throw new BadRequestException('Reply target must be in the same conversation');
+      }
+      if (replyTo.deletedAt) throw new BadRequestException('Cannot reply to deleted message');
+    }
+
+    if (data.forwardFromId) {
+      const forwardFrom = await this.findMessageWithAccess(data.forwardFromId, senderId);
+      if (forwardFrom.deletedAt) throw new BadRequestException('Cannot forward deleted message');
     }
 
     const message = await this.prisma.$transaction(async prisma => {
       const created = await prisma.message.create({
-        data: { conversationId, senderId, content: nextContent, type },
+        data: {
+          conversationId,
+          senderId,
+          content: nextContent,
+          type: data.type || 'text',
+          clientId: data.clientId,
+          replyToId: data.replyToId,
+          forwardFromId: data.forwardFromId,
+        },
         include: this.messageInclude(),
       });
 
@@ -47,6 +74,42 @@ export class MessagesService {
     return message;
   }
 
+  async forward(messageId: string, userId: string, targetConversationId: string, clientId?: string) {
+    const source = await this.findMessageWithAccess(messageId, userId);
+    if (source.deletedAt) throw new BadRequestException('Cannot forward deleted message');
+    await this.ensureParticipant(targetConversationId, userId);
+
+    return this.create(targetConversationId, userId, {
+      conversationId: targetConversationId,
+      content: source.content,
+      type: source.type,
+      clientId,
+      forwardFromId: source.id,
+    });
+  }
+
+  async search(conversationId: string, userId: string, query: string, limit = 20) {
+    await this.ensureParticipant(conversationId, userId);
+    const q = query.trim();
+    if (q.length < 2) return { messages: [] };
+
+    const messages = await this.prisma.message.findMany({
+      where: {
+        conversationId,
+        deletedAt: null,
+        content: { contains: q, mode: 'insensitive' },
+      },
+      orderBy: [
+        { createdAt: 'desc' },
+        { id: 'desc' },
+      ],
+      take: Math.min(Math.max(limit, 1), 50),
+      include: this.messageInclude(),
+    });
+
+    return { messages };
+  }
+
   async findByConversation(
     conversationId: string,
     userId: string,
@@ -54,13 +117,7 @@ export class MessagesService {
     cursor: { beforeCreatedAt?: string; beforeId?: string; before?: string } = {},
   ) {
     // 验证权限
-    const participant = await this.prisma.userConversation.findUnique({
-      where: { userId_conversationId: { userId, conversationId } },
-    });
-
-    if (!participant) {
-      throw new ForbiddenException('Not in conversation');
-    }
+    await this.ensureParticipant(conversationId, userId);
 
     const where: any = { conversationId };
     if (cursor.beforeCreatedAt && cursor.beforeId) {
@@ -190,23 +247,41 @@ export class MessagesService {
 
     if (!message) throw new NotFoundException('Message not found');
 
+    await this.ensureParticipant(message.conversationId, userId);
+
+    return message;
+  }
+
+  private async ensureParticipant(conversationId: string, userId: string) {
     const participant = await this.prisma.userConversation.findUnique({
-      where: {
-        userId_conversationId: {
-          userId,
-          conversationId: message.conversationId,
-        },
-      },
+      where: { userId_conversationId: { userId, conversationId } },
     });
 
     if (!participant) throw new ForbiddenException('Not in conversation');
-
-    return message;
+    return participant;
   }
 
   private messageInclude() {
     return {
       sender: { select: { id: true, username: true, avatar: true } },
+      replyTo: {
+        select: {
+          id: true,
+          content: true,
+          senderId: true,
+          deletedAt: true,
+          sender: { select: { id: true, username: true, avatar: true } },
+        },
+      },
+      forwardFrom: {
+        select: {
+          id: true,
+          content: true,
+          senderId: true,
+          deletedAt: true,
+          sender: { select: { id: true, username: true, avatar: true } },
+        },
+      },
       reactions: {
         include: {
           user: { select: { id: true, username: true } },

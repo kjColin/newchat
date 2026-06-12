@@ -1,7 +1,14 @@
 import { Controller, Get, Post, Patch, Delete, Param, Query, Body, UseGuards, Request } from '@nestjs/common';
 import { MessagesService } from './messages.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
-import { CreateMessageDto, EditMessageDto, GetMessagesQueryDto, ToggleReactionDto } from './dto/message.dto';
+import {
+  CreateMessageDto,
+  EditMessageDto,
+  ForwardMessageDto,
+  GetMessagesQueryDto,
+  SearchMessagesQueryDto,
+  ToggleReactionDto,
+} from './dto/message.dto';
 
 @Controller('messages')
 @UseGuards(JwtAuthGuard)
@@ -10,7 +17,21 @@ export class MessagesController {
 
   @Post()
   async create(@Request() req: any, @Body() body: CreateMessageDto) {
-    return this.messagesService.create(body.conversationId, req.user.userId, body.content, body.type);
+    return this.messagesService.create(body.conversationId, req.user.userId, body);
+  }
+
+  @Get(':conversationId/search')
+  async search(
+    @Request() req: any,
+    @Param('conversationId') conversationId: string,
+    @Query() query: SearchMessagesQueryDto,
+  ) {
+    return this.messagesService.search(conversationId, req.user.userId, query.q, query.limit || 20);
+  }
+
+  @Post(':messageId/forward')
+  async forward(@Request() req: any, @Param('messageId') messageId: string, @Body() body: ForwardMessageDto) {
+    return this.messagesService.forward(messageId, req.user.userId, body.conversationId, body.clientId);
   }
 
   @Patch(':messageId')

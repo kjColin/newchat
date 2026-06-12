@@ -158,11 +158,24 @@
   "messages": [
     {
       "id": "uuid",
+      "clientId": "optional-client-id",
       "conversationId": "uuid",
       "senderId": "uuid",
+      "replyToId": "uuid|null",
+      "forwardFromId": "uuid|null",
       "content": "string",
       "type": "text|image|file",
-      "createdAt": "timestamp"
+      "createdAt": "timestamp",
+      "replyTo": {
+        "id": "uuid",
+        "content": "string",
+        "sender": {}
+      },
+      "forwardFrom": {
+        "id": "uuid",
+        "content": "string",
+        "sender": {}
+      }
     }
   ],
   "hasMore": true
@@ -177,7 +190,10 @@
 {
   "conversationId": "uuid",
   "content": "string",
-  "type": "text"
+  "type": "text",
+  "clientId": "optional-client-id",
+  "replyToId": "uuid|null",
+  "forwardFromId": "uuid|null"
 }
 ```
 
@@ -185,10 +201,34 @@
 ```json
 {
   "id": "uuid",
+  "clientId": "optional-client-id",
   "conversationId": "uuid",
   "senderId": "uuid",
   "content": "string",
   "createdAt": "timestamp"
+}
+```
+
+### GET /api/messages/:conversationId/search
+搜索当前会话内未删除的文本消息。
+
+**Query**: `?q=<keyword>&limit=20`
+
+**Response** (200)
+```json
+{
+  "messages": []
+}
+```
+
+### POST /api/messages/:messageId/forward
+将一条可访问、未删除的消息转发到目标会话。
+
+**Request**
+```json
+{
+  "conversationId": "target-conversation-id",
+  "clientId": "optional-client-id"
 }
 ```
 

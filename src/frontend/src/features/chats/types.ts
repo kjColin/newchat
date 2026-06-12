@@ -2,10 +2,13 @@ import type { SearchUser } from '../users/types';
 
 export type Message = {
   id: string;
+  clientId?: string | null;
   content: string;
   type: string;
   senderId: string;
   conversationId: string;
+  replyToId?: string | null;
+  forwardFromId?: string | null;
   createdAt: string;
   editedAt?: string | null;
   deletedAt?: string | null;
@@ -14,7 +17,21 @@ export type Message = {
     username: string;
     avatar?: string | null;
   };
+  replyTo?: MessageReference | null;
+  forwardFrom?: MessageReference | null;
   reactions?: MessageReaction[];
+};
+
+export type MessageReference = {
+  id: string;
+  content: string;
+  senderId: string;
+  deletedAt?: string | null;
+  sender?: {
+    id: string;
+    username: string;
+    avatar?: string | null;
+  };
 };
 
 export type MessageReaction = {
@@ -51,6 +68,10 @@ export type Conversation = {
 export type MessagesResponse = {
   messages: Message[];
   hasMore: boolean;
+};
+
+export type MessageSearchResponse = {
+  messages: Message[];
 };
 
 export type GroupMember = {

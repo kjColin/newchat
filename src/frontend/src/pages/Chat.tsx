@@ -9,11 +9,13 @@ import {
   deleteMessage,
   editMessage,
   addGroupMembers,
+  forwardMessage,
   getConversations,
   getGroupMembers,
   getMessages,
   markConversationRead,
   removeGroupMember,
+  searchMessages,
   sendMessage,
   toggleReaction,
   updateConversationSettings,
@@ -47,6 +49,11 @@ function sortConversations(list: Conversation[]) {
   });
 }
 
+function createClientId() {
+  const random = Math.random().toString(36).slice(2);
+  return `${Date.now().toString(36)}-${random}`;
+}
+
 export function ChatPage() {
   const navigate = useNavigate();
   const currentUser = useMemo(() => authStore.getUser(), []) as User | null;
@@ -55,12 +62,16 @@ export function ChatPage() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [draft, setDraft] = useState('');
   const [editingMessage, setEditingMessage] = useState<Message | null>(null);
+  const [replyToMessage, setReplyToMessage] = useState<Message | null>(null);
   const [socket, setSocket] = useState<ChatSocket | null>(null);
   const [loadingConversations, setLoadingConversations] = useState(true);
   const [loadingMessages, setLoadingMessages] = useState(false);
   const [sending, setSending] = useState(false);
   const [sidebarError, setSidebarError] = useState('');
   const [messageError, setMessageError] = useState('');
+  const [messageSearch, setMessageSearch] = useState('');
+  const [messageSearchResults, setMessageSearchResults] = useState<Message[]>([]);
+  const [searchingMessages, setSearchingMessages] = useState(false);
   const [search, setSearch] = useState('');
   const [searchResults, setSearchResults] = useState<SearchUser[]>([]);
   const [mobileConversationOpen, setMobileConversationOpen] = useState(false);
@@ -236,6 +247,9 @@ export function ChatPage() {
   const selectConversation = async (conversation: Conversation) => {
     setActiveConversation(conversation);
     setGroupNameDraft(conversation.name);
+    setReplyToMessage(null);
+    setMessageSearch('');
+    setMessageSearchResults([]);
     setDetailsOpen(false);
     setMobileConversationOpen(true);
     setLoadingMessages(true);
@@ -272,13 +286,17 @@ export function ChatPage() {
         ));
         setEditingMessage(null);
       } else {
-        const message = await sendMessage(activeConversation.id, content);
+        const message = await sendMessage(activeConversation.id, content, {
+          clientId: createClientId(),
+          replyToId: replyToMessage?.id,
+        });
         setMessages(prev => prev.some(existing => existing.id === message.id) ? prev : [...prev, message]);
         setConversations(prev => sortConversations(prev.map(conversation =>
           conversation.id === message.conversationId
             ? { ...conversation, lastMessage: message, unreadCount: 0, lastActivityAt: message.createdAt }
             : conversation
         )));
+        setReplyToMessage(null);
       }
       setDraft('');
     } catch (error: any) {
@@ -301,7 +319,30 @@ export function ChatPage() {
 
   const handleEdit = (message: Message) => {
     setEditingMessage(message);
+    setReplyToMessage(null);
     setDraft(message.content);
+  };
+
+  const handleReply = (message: Message) => {
+    setEditingMessage(null);
+    setReplyToMessage(message);
+    setDraft('');
+  };
+
+  const handleForward = async (message: Message) => {
+    if (!activeConversation) return;
+    setMessageError('');
+    try {
+      const forwarded = await forwardMessage(message.id, activeConversation.id, createClientId());
+      setMessages(prev => prev.some(existing => existing.id === forwarded.id) ? prev : [...prev, forwarded]);
+      setConversations(prev => sortConversations(prev.map(conversation =>
+        conversation.id === forwarded.conversationId
+          ? { ...conversation, lastMessage: forwarded, unreadCount: 0, lastActivityAt: forwarded.createdAt }
+          : conversation
+      )));
+    } catch (error: any) {
+      setMessageError(error.response?.data?.message || 'Could not forward message');
+    }
   };
 
   const handleDelete = async (message: Message) => {
@@ -328,6 +369,40 @@ export function ChatPage() {
     } catch (error: any) {
       setMessageError(error.response?.data?.message || 'Could not update reaction');
     }
+  };
+
+  const handleMessageSearch = async (value: string) => {
+    setMessageSearch(value);
+    if (!activeConversation || value.trim().length < 2) {
+      setMessageSearchResults([]);
+      return;
+    }
+
+    setSearchingMessages(true);
+    try {
+      const data = await searchMessages(activeConversation.id, value.trim());
+      setMessageSearchResults(data.messages);
+    } catch (error: any) {
+      setMessageError(error.response?.data?.message || 'Could not search messages');
+      setMessageSearchResults([]);
+    } finally {
+      setSearchingMessages(false);
+    }
+  };
+
+  const jumpToSearchResult = (message: Message) => {
+    setMessageSearch('');
+    setMessageSearchResults([]);
+    const found = messages.some(item => item.id === message.id);
+    if (!found) {
+      setMessages(prev => [...prev, message].sort((a, b) =>
+        new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+      ));
+    }
+
+    window.setTimeout(() => {
+      document.getElementById(`message-${message.id}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, 50);
   };
 
   const handleStartDirect = async (user: SearchUser) => {
@@ -499,6 +574,29 @@ export function ChatPage() {
               onBack={() => setMobileConversationOpen(false)}
               onOpenDetails={openDetails}
             />
+            <div className="message-search-bar">
+              <label className="search-field">
+                <input
+                  value={messageSearch}
+                  onChange={event => handleMessageSearch(event.target.value)}
+                  placeholder="Search messages"
+                />
+              </label>
+              {messageSearch.trim().length >= 2 && (
+                <div className="message-search-results">
+                  {searchingMessages && <span className="message-search-state">Searching...</span>}
+                  {!searchingMessages && messageSearchResults.length === 0 && (
+                    <span className="message-search-state">No results</span>
+                  )}
+                  {messageSearchResults.map(result => (
+                    <button key={result.id} type="button" onClick={() => jumpToSearchResult(result)}>
+                      <strong>{result.sender?.username || 'Message'}</strong>
+                      <span>{result.content}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
             <MessageList
               currentUser={currentUser}
               messages={messages}
@@ -508,18 +606,22 @@ export function ChatPage() {
               onEdit={handleEdit}
               onDelete={handleDelete}
               onReact={handleReact}
+              onReply={handleReply}
+              onForward={handleForward}
             />
             <MessageComposer
               value={draft}
               disabled={loadingMessages}
               sending={sending}
               editing={Boolean(editingMessage)}
+              replyTo={replyToMessage}
               onChange={handleDraftChange}
               onSend={handleSend}
               onCancelEdit={() => {
                 setEditingMessage(null);
                 setDraft('');
               }}
+              onCancelReply={() => setReplyToMessage(null)}
             />
           </>
         ) : (

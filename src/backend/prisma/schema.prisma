@@ -38,20 +38,31 @@ model Conversation {
 
 model Message {
   id             String       @id @default(uuid())
+  clientId       String?
   content        String
   type           String       @default("text") // text, image, file
   senderId       String
   conversationId String
+  replyToId      String?
+  forwardFromId  String?
   createdAt      DateTime     @default(now())
   editedAt       DateTime?
   deletedAt      DateTime?
 
   sender         User         @relation(fields: [senderId], references: [id])
   conversation   Conversation @relation(fields: [conversationId], references: [id])
+  replyTo        Message?     @relation("MessageReplies", fields: [replyToId], references: [id], onDelete: SetNull)
+  replies        Message[]    @relation("MessageReplies")
+  forwardFrom    Message?     @relation("MessageForwards", fields: [forwardFromId], references: [id], onDelete: SetNull)
+  forwards       Message[]    @relation("MessageForwards")
   reactions      MessageReaction[]
 
+  @@unique([senderId, clientId])
   @@index([conversationId, createdAt, id])
+  @@index([conversationId, deletedAt, createdAt])
   @@index([senderId, createdAt])
+  @@index([replyToId])
+  @@index([forwardFromId])
 }
 
 model MessageReaction {

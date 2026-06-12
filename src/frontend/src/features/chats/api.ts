@@ -1,5 +1,5 @@
 import { apiClient } from '../../shared/api/client';
-import type { Conversation, GroupMember, Message, MessagesResponse } from './types';
+import type { Conversation, GroupMember, Message, MessageSearchResponse, MessagesResponse } from './types';
 
 export async function getConversations() {
   const { data } = await apiClient.get<Conversation[]>('/conversations');
@@ -29,10 +29,30 @@ export async function getMessages(
   return data;
 }
 
-export async function sendMessage(conversationId: string, content: string) {
+export async function sendMessage(
+  conversationId: string,
+  content: string,
+  options: { clientId?: string; replyToId?: string; forwardFromId?: string } = {},
+) {
   const { data } = await apiClient.post<Message>('/messages', {
     conversationId,
     content,
+    ...options,
+  });
+  return data;
+}
+
+export async function forwardMessage(messageId: string, conversationId: string, clientId?: string) {
+  const { data } = await apiClient.post<Message>(`/messages/${messageId}/forward`, {
+    conversationId,
+    clientId,
+  });
+  return data;
+}
+
+export async function searchMessages(conversationId: string, query: string) {
+  const { data } = await apiClient.get<MessageSearchResponse>(`/messages/${conversationId}/search`, {
+    params: { q: query },
   });
   return data;
 }
