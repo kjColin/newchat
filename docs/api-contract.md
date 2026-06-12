@@ -296,6 +296,76 @@
 ### DELETE /api/groups/:conversationId/members/:userId
 移除群成员。成员可自行退出，owner/admin 可移除普通成员；owner 不可被移除。
 
+### GET /api/groups/:conversationId/invites
+获取当前群的邀请链接列表，要求当前用户为 owner 或 admin。
+
+**Response** (200)
+```json
+[
+  {
+    "id": "uuid",
+    "groupId": "uuid",
+    "code": "invite-code",
+    "createdById": "uuid",
+    "expiresAt": null,
+    "maxUses": null,
+    "usedCount": 0,
+    "revokedAt": null,
+    "createdAt": "timestamp",
+    "createdBy": {
+      "id": "uuid",
+      "username": "string"
+    }
+  }
+]
+```
+
+### POST /api/groups/:conversationId/invites
+创建群邀请链接，要求当前用户为 owner 或 admin。
+
+**Response** (201)
+```json
+{
+  "id": "uuid",
+  "groupId": "uuid",
+  "code": "invite-code",
+  "createdById": "uuid",
+  "expiresAt": null,
+  "maxUses": null,
+  "usedCount": 0,
+  "revokedAt": null,
+  "createdAt": "timestamp"
+}
+```
+
+前端复制的邀请 URL 形态为：`/chat?invite=<code>`。
+
+### DELETE /api/groups/:conversationId/invites/:inviteId
+撤销群邀请链接，要求当前用户为 owner 或 admin。
+
+### GET /api/groups/invites/:code
+预览邀请链接对应的群信息。当前接口仍要求登录。
+
+**Response** (200)
+```json
+{
+  "code": "invite-code",
+  "group": {
+    "id": "uuid",
+    "conversationId": "uuid",
+    "name": "string",
+    "avatar": null,
+    "memberCount": 12
+  }
+}
+```
+
+### POST /api/groups/invites/:code/join
+通过邀请链接加入群。已在群内的用户不会重复消耗邀请使用次数。
+
+**Response** (201)
+返回加入后的 group conversation 对象，结构与 `GET /api/conversations` 中群会话一致。
+
 ---
 
 ## WebSocket Events

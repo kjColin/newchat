@@ -23,6 +23,16 @@ export class GroupsController {
     return this.conversationsService.createDirect(req.user.userId, body.userId);
   }
 
+  @Get('invites/:code')
+  async previewInvite(@Param('code') code: string) {
+    return this.groupsService.previewInvite(code);
+  }
+
+  @Post('invites/:code/join')
+  async joinByInvite(@Request() req: any, @Param('code') code: string) {
+    return this.groupsService.joinByInvite(code, req.user.userId);
+  }
+
   @Patch(':conversationId/settings')
   async updateSettings(
     @Request() req: any,
@@ -53,6 +63,25 @@ export class GroupsController {
     @Body() body: AddGroupMembersDto,
   ) {
     return this.groupsService.addMembers(conversationId, req.user.userId, body.members || []);
+  }
+
+  @Get(':conversationId/invites')
+  async listInviteLinks(@Request() req: any, @Param('conversationId') conversationId: string) {
+    return this.groupsService.listInviteLinks(conversationId, req.user.userId);
+  }
+
+  @Post(':conversationId/invites')
+  async createInviteLink(@Request() req: any, @Param('conversationId') conversationId: string) {
+    return this.groupsService.createInviteLink(conversationId, req.user.userId);
+  }
+
+  @Delete(':conversationId/invites/:inviteId')
+  async revokeInviteLink(
+    @Request() req: any,
+    @Param('conversationId') conversationId: string,
+    @Param('inviteId') inviteId: string,
+  ) {
+    return this.groupsService.revokeInviteLink(conversationId, req.user.userId, inviteId);
   }
 
   @Delete(':conversationId/members/:userId')

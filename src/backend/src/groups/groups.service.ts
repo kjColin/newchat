@@ -1,4 +1,5 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { randomBytes } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { ConversationsService } from '../conversations/conversations.service';
 
@@ -136,6 +137,111 @@ export class GroupsService {
     return this.getMembers(conversationId, requesterId);
   }
 
+  async createInviteLink(conversationId: string, userId: string) {
+    const group = await this.getManageableGroup(conversationId, userId);
+    const code = await this.generateInviteCode();
+
+    return this.prisma.inviteLink.create({
+      data: {
+        groupId: group.id,
+        createdById: userId,
+        code,
+      },
+    });
+  }
+
+  async listInviteLinks(conversationId: string, userId: string) {
+    const group = await this.getManageableGroup(conversationId, userId);
+
+    return this.prisma.inviteLink.findMany({
+      where: { groupId: group.id },
+      orderBy: { createdAt: 'desc' },
+      include: {
+        createdBy: { select: { id: true, username: true } },
+      },
+    });
+  }
+
+  async revokeInviteLink(conversationId: string, userId: string, inviteId: string) {
+    const group = await this.getManageableGroup(conversationId, userId);
+    const invite = await this.prisma.inviteLink.findFirst({
+      where: { id: inviteId, groupId: group.id },
+    });
+    if (!invite) throw new NotFoundException('Invite link not found');
+
+    return this.prisma.inviteLink.update({
+      where: { id: invite.id },
+      data: { revokedAt: new Date() },
+    });
+  }
+
+  async previewInvite(code: string) {
+    const invite = await this.getValidInvite(code);
+    return {
+      code: invite.code,
+      group: {
+        id: invite.group.id,
+        conversationId: invite.group.conversationId,
+        name: invite.group.name,
+        avatar: invite.group.avatar,
+        memberCount: invite.group._count.members,
+      },
+    };
+  }
+
+  async joinByInvite(code: string, userId: string) {
+    const invite = await this.getValidInvite(code);
+    const conversationId = invite.group.conversationId;
+
+    await this.prisma.$transaction(async prisma => {
+      const memberCreate = await prisma.groupMember.createMany({
+        data: [{ userId, groupId: invite.groupId }],
+        skipDuplicates: true,
+      });
+
+      await prisma.userConversation.createMany({
+        data: [{ userId, conversationId }],
+        skipDuplicates: true,
+      });
+
+      if (memberCreate.count > 0) {
+        await prisma.inviteLink.update({
+          where: { id: invite.id },
+          data: { usedCount: { increment: 1 } },
+        });
+      }
+    });
+
+    const conversation = await this.prisma.conversation.findUnique({
+      where: { id: conversationId },
+      include: {
+        group: { include: { _count: { select: { members: true } } } },
+        participants: {
+          include: {
+            user: {
+              select: {
+                id: true,
+                username: true,
+                email: true,
+                avatar: true,
+                status: true,
+                lastSeen: true,
+              },
+            },
+          },
+        },
+        messages: { take: 1, orderBy: { createdAt: 'desc' } },
+      },
+    });
+
+    if (!conversation || !conversation.group) throw new NotFoundException('Group not found');
+    return this.conversationsService.formatGroupConversation(
+      conversation.group,
+      conversation,
+      conversation.group._count.members,
+    );
+  }
+
   private async getGroupForParticipant(conversationId: string, userId: string) {
     const participant = await this.prisma.userConversation.findUnique({
       where: { userId_conversationId: { userId, conversationId } },
@@ -158,6 +264,37 @@ export class GroupsService {
     }
 
     return group;
+  }
+
+  private async getValidInvite(code: string) {
+    const invite = await this.prisma.inviteLink.findUnique({
+      where: { code },
+      include: {
+        group: {
+          include: {
+            _count: { select: { members: true } },
+          },
+        },
+      },
+    });
+
+    if (!invite || invite.revokedAt) throw new NotFoundException('Invite link not found');
+    if (invite.expiresAt && invite.expiresAt <= new Date()) throw new BadRequestException('Invite link has expired');
+    if (invite.maxUses !== null && invite.maxUses !== undefined && invite.usedCount >= invite.maxUses) {
+      throw new BadRequestException('Invite link has reached its usage limit');
+    }
+
+    return invite;
+  }
+
+  private async generateInviteCode() {
+    for (let attempt = 0; attempt < 5; attempt++) {
+      const code = randomBytes(12).toString('base64url');
+      const existing = await this.prisma.inviteLink.findUnique({ where: { code } });
+      if (!existing) return code;
+    }
+
+    throw new BadRequestException('Could not create invite link');
   }
 
 }

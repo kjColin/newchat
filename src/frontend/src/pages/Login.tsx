@@ -1,8 +1,12 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { login, register } from '../features/auth/api';
 import { authStore } from '../features/auth/auth-store';
 import './Login.css';
+
+function getSafeRedirect(value: string | null) {
+  return value?.startsWith('/') && !value.startsWith('//') ? value : '/chat';
+}
 
 export function LoginPage() {
   const [isLogin, setIsLogin] = useState(true);
@@ -10,6 +14,8 @@ export function LoginPage() {
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const navigate = useNavigate();
+  const location = useLocation();
+  const redirect = getSafeRedirect(new URLSearchParams(location.search).get('redirect'));
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -22,7 +28,7 @@ export function LoginPage() {
         : await register(form);
 
       authStore.setSession(data.token, data.user);
-      navigate('/chat', { replace: true });
+      navigate(redirect, { replace: true });
     } catch (err: any) {
       setError(err.response?.data?.message || 'An error occurred');
     } finally {

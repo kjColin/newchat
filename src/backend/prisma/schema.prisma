@@ -8,29 +8,30 @@ datasource db {
 }
 
 model User {
-  id            String    @id @default(uuid())
-  username      String    @unique
-  email         String    @unique
-  password      String
-  avatar        String?
-  status        String    @default("offline")
-  lastSeen      DateTime  @default(now())
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  id        String   @id @default(uuid())
+  username  String   @unique
+  email     String   @unique
+  password  String
+  avatar    String?
+  status    String   @default("offline")
+  lastSeen  DateTime @default(now())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  messages      Message[]
-  memberships   GroupMember[]
-  conversations UserConversation[]
-  reactions     MessageReaction[]
-  attachments   Attachment[]
+  messages           Message[]
+  memberships        GroupMember[]
+  conversations      UserConversation[]
+  reactions          MessageReaction[]
+  attachments        Attachment[]
+  createdInviteLinks InviteLink[]
 }
 
 model Conversation {
-  id           String    @id @default(uuid())
-  type         String    @default("direct") // direct, group
-  name         String?
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
+  id        String   @id @default(uuid())
+  type      String   @default("direct") // direct, group
+  name      String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   messages     Message[]
   participants UserConversation[]
@@ -38,26 +39,26 @@ model Conversation {
 }
 
 model Message {
-  id             String       @id @default(uuid())
+  id             String    @id @default(uuid())
   clientId       String?
   content        String
-  type           String       @default("text") // text, image, file
+  type           String    @default("text") // text, image, file
   senderId       String
   conversationId String
   replyToId      String?
   forwardFromId  String?
-  createdAt      DateTime     @default(now())
+  createdAt      DateTime  @default(now())
   editedAt       DateTime?
   deletedAt      DateTime?
 
-  sender         User         @relation(fields: [senderId], references: [id])
-  conversation   Conversation @relation(fields: [conversationId], references: [id])
-  replyTo        Message?     @relation("MessageReplies", fields: [replyToId], references: [id], onDelete: SetNull)
-  replies        Message[]    @relation("MessageReplies")
-  forwardFrom    Message?     @relation("MessageForwards", fields: [forwardFromId], references: [id], onDelete: SetNull)
-  forwards       Message[]    @relation("MessageForwards")
-  reactions      MessageReaction[]
-  attachments    Attachment[]
+  sender       User              @relation(fields: [senderId], references: [id])
+  conversation Conversation      @relation(fields: [conversationId], references: [id])
+  replyTo      Message?          @relation("MessageReplies", fields: [replyToId], references: [id], onDelete: SetNull)
+  replies      Message[]         @relation("MessageReplies")
+  forwardFrom  Message?          @relation("MessageForwards", fields: [forwardFromId], references: [id], onDelete: SetNull)
+  forwards     Message[]         @relation("MessageForwards")
+  reactions    MessageReaction[]
+  attachments  Attachment[]
 
   @@unique([senderId, clientId])
   @@index([conversationId, createdAt, id])
@@ -80,8 +81,8 @@ model Attachment {
   thumbnailUrl String?
   createdAt    DateTime @default(now())
 
-  message      Message? @relation(fields: [messageId], references: [id], onDelete: SetNull)
-  uploader     User     @relation(fields: [uploaderId], references: [id])
+  message  Message? @relation(fields: [messageId], references: [id], onDelete: SetNull)
+  uploader User     @relation(fields: [uploaderId], references: [id])
 
   @@index([messageId])
   @@index([uploaderId, createdAt])
@@ -94,51 +95,70 @@ model MessageReaction {
   messageId String
   createdAt DateTime @default(now())
 
-  user      User     @relation(fields: [userId], references: [id])
-  message   Message  @relation(fields: [messageId], references: [id])
+  user    User    @relation(fields: [userId], references: [id])
+  message Message @relation(fields: [messageId], references: [id])
 
   @@unique([userId, messageId, emoji])
   @@index([messageId])
 }
 
 model Group {
-  id          String   @id @default(uuid())
-  name        String
-  avatar      String?
-  ownerId     String
-  conversationId String @unique
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id             String   @id @default(uuid())
+  name           String
+  avatar         String?
+  ownerId        String
+  conversationId String   @unique
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
-  conversation Conversation @relation(fields: [conversationId], references: [id])
+  conversation Conversation  @relation(fields: [conversationId], references: [id])
   members      GroupMember[]
+  inviteLinks  InviteLink[]
+}
+
+model InviteLink {
+  id          String    @id @default(uuid())
+  groupId     String
+  code        String    @unique
+  createdById String
+  expiresAt   DateTime?
+  maxUses     Int?
+  usedCount   Int       @default(0)
+  revokedAt   DateTime?
+  createdAt   DateTime  @default(now())
+
+  group     Group @relation(fields: [groupId], references: [id])
+  createdBy User  @relation(fields: [createdById], references: [id])
+
+  @@index([groupId, revokedAt])
+  @@index([createdById])
 }
 
 model GroupMember {
-  id        String   @id @default(uuid())
-  userId    String
-  groupId   String
-  role      String   @default("member") // owner, admin, member
-  joinedAt  DateTime @default(now())
+  id       String   @id @default(uuid())
+  userId   String
+  groupId  String
+  role     String   @default("member") // owner, admin, member
+  joinedAt DateTime @default(now())
 
-  user      User     @relation(fields: [userId], references: [id])
-  group     Group    @relation(fields: [groupId], references: [id])
+  user  User  @relation(fields: [userId], references: [id])
+  group Group @relation(fields: [groupId], references: [id])
 
   @@unique([userId, groupId])
   @@index([groupId, role])
 }
 
 model UserConversation {
-  userId          String
-  conversationId  String
-  lastReadAt      DateTime?
-  pinnedAt        DateTime?
-  mutedUntil      DateTime?
-  archivedAt      DateTime?
-  addedAt         DateTime   @default(now())
+  userId         String
+  conversationId String
+  lastReadAt     DateTime?
+  pinnedAt       DateTime?
+  mutedUntil     DateTime?
+  archivedAt     DateTime?
+  addedAt        DateTime  @default(now())
 
-  user            User       @relation(fields: [userId], references: [id])
-  conversation    Conversation @relation(fields: [conversationId], references: [id])
+  user         User         @relation(fields: [userId], references: [id])
+  conversation Conversation @relation(fields: [conversationId], references: [id])
 
   @@id([userId, conversationId])
   @@index([userId, archivedAt, pinnedAt])

@@ -16,13 +16,13 @@ NewChat 是一个面向即时通讯场景的 Web 聊天应用，目标体验参�
 ### 2.1 产品目标
 
 - 支持用户注册、登录、个人资料与头像。
-- 支持用户搜索、单聊、群聊、群成员管理。
+- 支持用户搜索、单聊、群聊、群成员管理、群邀请链接。
 - 支持实时消息、输入中、在线状态、已读状态。
 - 支持消息编辑、删除、表情反应、回复、转发。
 - 支持图片、文件、语音等附件消息。
 - 支持会话置顶、免打扰、归档、未读统计。
 - 支持消息搜索、会话内搜索、媒体/文件列表。
-- 支持后续扩展频道、公开群、邀请链接、机器人接口。
+- 支持后续扩展频道、公开群、机器人接口。
 
 ### 2.2 工程目标
 
@@ -204,23 +204,12 @@ PostgreSQL
 | `MessageReaction` | 消息表情反应 |
 | `Group` | 群资料、群主、关联会话 |
 | `GroupMember` | 群成员和角色 |
+| `Attachment` | 文件/图片等附件元数据 |
+| `InviteLink` | 群邀请链接、撤销状态、使用次数 |
 
 ### 7.2 建议新增模型
 
 ```prisma
-model Attachment {
-  id          String   @id @default(uuid())
-  messageId   String
-  uploaderId  String
-  kind        String   // image, video, audio, file
-  fileName    String
-  mimeType    String
-  size        Int
-  url         String
-  thumbnailUrl String?
-  createdAt   DateTime @default(now())
-}
-
 model MessageReadReceipt {
   messageId String
   userId    String
@@ -253,18 +242,6 @@ model BlockList {
   createdAt DateTime @default(now())
 
   @@id([blockerId, blockedId])
-}
-
-model InviteLink {
-  id             String   @id @default(uuid())
-  groupId        String
-  code           String   @unique
-  createdById    String
-  expiresAt      DateTime?
-  maxUses        Int?
-  usedCount      Int      @default(0)
-  revokedAt      DateTime?
-  createdAt      DateTime @default(now())
 }
 ```
 
@@ -302,6 +279,11 @@ REST API 负责可重放、可校验的命令和查询。
 | `GET` | `/api/groups/:conversationId/members` | 群成员列表 |
 | `POST` | `/api/groups/:conversationId/members` | 添加群成员 |
 | `DELETE` | `/api/groups/:conversationId/members/:userId` | 移除群成员 |
+| `GET` | `/api/groups/:conversationId/invites` | 群邀请链接列表 |
+| `POST` | `/api/groups/:conversationId/invites` | 创建群邀请链接 |
+| `DELETE` | `/api/groups/:conversationId/invites/:inviteId` | 撤销群邀请链接 |
+| `GET` | `/api/groups/invites/:code` | 预览邀请链接 |
+| `POST` | `/api/groups/invites/:code/join` | 通过邀请链接入群 |
 | `POST` | `/api/files` | 上传附件 |
 
 ### 8.2 WebSocket Events

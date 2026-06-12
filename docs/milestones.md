@@ -9,10 +9,10 @@
 |------|--------|------|
 | 项目初始化 | arch | ✅ |
 | 架构设计文档 | arch | ✅ |
-| 后端基础框架搭建 | backend | ⏳ |
-| 前端基础框架搭建 | frontend | ⏳ |
-| 用户注册/登录 | backend | ⏳ |
-| 登录页面 | frontend | ⏳ |
+| 后端基础框架搭建 | backend | ✅ |
+| 前端基础框架搭建 | frontend | ✅ |
+| 用户注册/登录 | backend | ✅ |
+| 登录页面 | frontend | ✅ |
 | Docker 配置 | ops-deploy | ⏳ |
 | GitLab CI 基础 | ops-deploy | ⏳ |
 
@@ -28,10 +28,11 @@
 
 | 任务 | 负责人 | 状态 |
 |------|--------|------|
-| 群组功能 | backend | ⏳ |
-| WebSocket 实时消息 | backend | ⏳ |
-| 聊天界面 | frontend | ⏳ |
-| 群组列表 | frontend | ⏳ |
+| 群组功能 | backend | ✅ |
+| 群邀请链接 | fullstack | ✅ |
+| WebSocket 实时消息 | backend | ✅ |
+| 聊天界面 | frontend | ✅ |
+| 群组列表 | frontend | ✅ |
 | 单元测试 | qa-audit | ⏳ |
 | 集成测试 | qa-audit | ⏳ |
 
@@ -47,10 +48,10 @@
 
 | 任务 | 负责人 | 状态 |
 |------|--------|------|
-| 文件上传/下载 | backend | ⏳ |
-| 消息已读状态 | backend | ⏳ |
+| 文件上传/下载 | backend | ✅ |
+| 消息已读状态 | backend | ✅ |
 | 用户头像 | frontend | ⏳ |
-| 搜索功能 | backend | ⏳ |
+| 搜索功能 | backend | ✅ |
 | 性能优化 | all | ⏳ |
 
 **交付物**:
@@ -82,8 +83,8 @@
 
 ```
 Milestone 1: ████████░░ 80%
-Milestone 2: ███░░░░░░░ 15%
-Milestone 3: ░░░░░░░░░░  0%
+Milestone 2: ████████░░ 80%
+Milestone 3: ██████░░░░ 60%
 Milestone 4: ░░░░░░░░░░  0%
 ```
 
@@ -118,4 +119,4 @@ Milestone 4
 
 ---
 
-**最后更新**: 2026-03-03
+**最后更新**: 2026-06-13

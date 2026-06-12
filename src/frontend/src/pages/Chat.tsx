@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { MessageCircle } from 'lucide-react';
 import { authStore } from '../features/auth/auth-store';
@@ -6,15 +6,19 @@ import type { User } from '../features/auth/types';
 import {
   createDirectConversation,
   createGroup,
+  createGroupInviteLink,
   deleteMessage,
   editMessage,
   addGroupMembers,
   forwardMessage,
   getConversations,
+  getGroupInviteLinks,
   getGroupMembers,
   getMessages,
+  joinGroupByInvite,
   markConversationRead,
   removeGroupMember,
+  revokeGroupInviteLink,
   searchMessages,
   sendMessage,
   toggleReaction,
@@ -29,7 +33,7 @@ import { MessageComposer } from '../features/chats/components/MessageComposer';
 import { MessageList } from '../features/chats/components/MessageList';
 import { connectChatSocket, joinConversation, startTyping, stopTyping } from '../features/chats/socket';
 import type { ChatSocket } from '../features/chats/socket';
-import type { Attachment, Conversation, GroupMember, Message } from '../features/chats/types';
+import type { Attachment, Conversation, GroupMember, InviteLink, Message } from '../features/chats/types';
 import { CreateGroupModal } from '../features/groups/components/CreateGroupModal';
 import { searchUsers } from '../features/users/api';
 import type { SearchUser } from '../features/users/types';
@@ -53,6 +57,47 @@ function sortConversations(list: Conversation[]) {
 function createClientId() {
   const random = Math.random().toString(36).slice(2);
   return `${Date.now().toString(36)}-${random}`;
+}
+
+async function copyTextToClipboard(value: string) {
+  if (navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(value);
+    return;
+  }
+
+  const textArea = document.createElement('textarea');
+  textArea.value = value;
+  textArea.style.position = 'fixed';
+  textArea.style.opacity = '0';
+  document.body.appendChild(textArea);
+  textArea.select();
+  document.execCommand('copy');
+  textArea.remove();
+}
+
+function parseInviteCode(value: string) {
+  const trimmed = value.trim();
+  if (!trimmed) return '';
+
+  try {
+    const url = new URL(trimmed, window.location.origin);
+    const inviteParam = url.searchParams.get('invite');
+    if (inviteParam) return inviteParam.trim();
+
+    const segments = url.pathname.split('/').filter(Boolean);
+    const inviteSegment = segments.findIndex(segment => segment === 'invite' || segment === 'invites');
+    if (inviteSegment >= 0 && segments[inviteSegment + 1]) {
+      return decodeURIComponent(segments[inviteSegment + 1]);
+    }
+
+    if (segments.length > 0 && url.pathname !== '/chat') {
+      return decodeURIComponent(segments[segments.length - 1]);
+    }
+  } catch {
+    return trimmed;
+  }
+
+  return trimmed;
 }
 
 export function ChatPage() {
@@ -89,12 +134,72 @@ export function ChatPage() {
   const [members, setMembers] = useState<GroupMember[]>([]);
   const [membersLoading, setMembersLoading] = useState(false);
   const [detailsError, setDetailsError] = useState('');
+  const [detailsNotice, setDetailsNotice] = useState('');
   const [memberSearch, setMemberSearch] = useState('');
   const [memberSearchResults, setMemberSearchResults] = useState<SearchUser[]>([]);
   const [groupNameDraft, setGroupNameDraft] = useState('');
+  const [inviteLinks, setInviteLinks] = useState<InviteLink[]>([]);
+  const [inviteLoading, setInviteLoading] = useState(false);
+  const [inviteInput, setInviteInput] = useState('');
+  const [joiningInvite, setJoiningInvite] = useState(false);
   const activeConversationId = useRef<string | null>(null);
+  const handledInviteCode = useRef<string | null>(null);
   const typingTimer = useRef<number | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
+
+  const selectConversation = useCallback(async (conversation: Conversation) => {
+    setActiveConversation(conversation);
+    setGroupNameDraft(conversation.name);
+    setReplyToMessage(null);
+    setPendingAttachments([]);
+    setMessageSearch('');
+    setMessageSearchResults([]);
+    setDetailsOpen(false);
+    setMobileConversationOpen(true);
+    setLoadingMessages(true);
+    setMessageError('');
+    joinConversation(socket, conversation.id);
+
+    try {
+      const data = await getMessages(conversation.id);
+      setMessages(data.messages);
+      const read = await markConversationRead(conversation.id).catch(() => null);
+      setConversations(prev => prev.map(item =>
+        item.id === conversation.id ? { ...item, unreadCount: 0, lastReadAt: read?.lastReadAt || item.lastReadAt } : item
+      ));
+    } catch (error: any) {
+      setMessages([]);
+      setMessageError(error.response?.data?.message || 'Could not load messages');
+    } finally {
+      setLoadingMessages(false);
+    }
+  }, [socket]);
+
+  const joinInviteCode = useCallback(async (value: string, options: { clearUrl?: boolean } = {}) => {
+    const code = parseInviteCode(value);
+    if (!code) {
+      setSidebarError('Invite code is required');
+      return;
+    }
+
+    setJoiningInvite(true);
+    setSidebarError('');
+    try {
+      const conversation = await joinGroupByInvite(code);
+      setConversations(prev => sortConversations(upsertConversation(prev, conversation)));
+      setInviteInput('');
+      await selectConversation(conversation);
+    } catch (error: any) {
+      setSidebarError(error.response?.data?.message || 'Could not join invite');
+    } finally {
+      setJoiningInvite(false);
+      if (options.clearUrl) {
+        const url = new URL(window.location.href);
+        url.searchParams.delete('invite');
+        window.history.replaceState({}, '', `${url.pathname}${url.search}${url.hash}`);
+      }
+    }
+  }, [selectConversation]);
 
   useEffect(() => {
     if (!currentUser) {
@@ -106,6 +211,12 @@ export function ChatPage() {
   useEffect(() => {
     activeConversationId.current = activeConversation?.id || null;
   }, [activeConversation?.id]);
+
+  useEffect(() => {
+    if (socket && activeConversation?.id) {
+      joinConversation(socket, activeConversation.id);
+    }
+  }, [socket, activeConversation?.id]);
 
   useEffect(() => {
     const token = authStore.getToken();
@@ -193,7 +304,8 @@ export function ChatPage() {
       setLoadingConversations(true);
       setSidebarError('');
       try {
-        setConversations(sortConversations(await getConversations()));
+        const loaded = await getConversations();
+        setConversations(prev => sortConversations(loaded.reduce(upsertConversation, prev)));
       } catch (error: any) {
         setSidebarError(error.response?.data?.message || 'Could not load chats');
       } finally {
@@ -203,6 +315,14 @@ export function ChatPage() {
 
     load();
   }, []);
+
+  useEffect(() => {
+    const code = new URLSearchParams(window.location.search).get('invite');
+    if (!code || handledInviteCode.current === code) return;
+
+    handledInviteCode.current = code;
+    joinInviteCode(code, { clearUrl: true });
+  }, [joinInviteCode]);
 
   useEffect(() => {
     const timer = window.setTimeout(async () => {
@@ -245,34 +365,6 @@ export function ChatPage() {
   }, [messages.length]);
 
   if (!currentUser) return null;
-
-  const selectConversation = async (conversation: Conversation) => {
-    setActiveConversation(conversation);
-    setGroupNameDraft(conversation.name);
-    setReplyToMessage(null);
-    setPendingAttachments([]);
-    setMessageSearch('');
-    setMessageSearchResults([]);
-    setDetailsOpen(false);
-    setMobileConversationOpen(true);
-    setLoadingMessages(true);
-    setMessageError('');
-    joinConversation(socket, conversation.id);
-
-    try {
-      const data = await getMessages(conversation.id);
-      setMessages(data.messages);
-      const read = await markConversationRead(conversation.id).catch(() => null);
-      setConversations(prev => prev.map(item =>
-        item.id === conversation.id ? { ...item, unreadCount: 0, lastReadAt: read?.lastReadAt || item.lastReadAt } : item
-      ));
-    } catch (error: any) {
-      setMessages([]);
-      setMessageError(error.response?.data?.message || 'Could not load messages');
-    } finally {
-      setLoadingMessages(false);
-    }
-  };
 
   const handleSend = async () => {
     const content = draft.trim();
@@ -512,6 +604,8 @@ export function ChatPage() {
     if (!activeConversation) return;
     setDetailsOpen(true);
     setDetailsError('');
+    setDetailsNotice('');
+    setInviteLinks([]);
     setGroupNameDraft(activeConversation.name);
     setMemberSearch('');
     setMemberSearchResults([]);
@@ -519,12 +613,62 @@ export function ChatPage() {
     if (activeConversation.type !== 'group') return;
 
     setMembersLoading(true);
+    setInviteLoading(true);
     try {
-      setMembers(await getGroupMembers(activeConversation.id));
+      const nextMembers = await getGroupMembers(activeConversation.id);
+      setMembers(nextMembers);
+      const currentMember = nextMembers.find(member => member.userId === currentUser.id);
+      if (currentMember?.role === 'owner' || currentMember?.role === 'admin') {
+        setInviteLinks(await getGroupInviteLinks(activeConversation.id));
+      } else {
+        setInviteLinks([]);
+      }
     } catch (error: any) {
       setDetailsError(error.response?.data?.message || 'Could not load members');
     } finally {
       setMembersLoading(false);
+      setInviteLoading(false);
+    }
+  };
+
+  const createInviteLink = async () => {
+    if (!activeConversation) return;
+    setInviteLoading(true);
+    setDetailsError('');
+    setDetailsNotice('');
+    try {
+      const invite = await createGroupInviteLink(activeConversation.id);
+      setInviteLinks(prev => [invite, ...prev]);
+    } catch (error: any) {
+      setDetailsError(error.response?.data?.message || 'Could not create invite link');
+    } finally {
+      setInviteLoading(false);
+    }
+  };
+
+  const copyInviteLink = async (invite: InviteLink) => {
+    setDetailsError('');
+    setDetailsNotice('');
+    try {
+      await copyTextToClipboard(`${window.location.origin}/chat?invite=${invite.code}`);
+      setDetailsNotice('Invite link copied');
+    } catch {
+      setDetailsError('Could not copy invite link');
+    }
+  };
+
+  const revokeInviteLink = async (inviteId: string) => {
+    if (!activeConversation) return;
+    setInviteLoading(true);
+    setDetailsError('');
+    setDetailsNotice('');
+    try {
+      const revoked = await revokeGroupInviteLink(activeConversation.id, inviteId);
+      setInviteLinks(prev => prev.map(invite => invite.id === revoked.id ? revoked : invite));
+    } catch (error: any) {
+      setDetailsError(error.response?.data?.message || 'Could not revoke invite link');
+    } finally {
+      setInviteLoading(false);
     }
   };
 
@@ -583,7 +727,11 @@ export function ChatPage() {
         users={searchResults}
         loading={loadingConversations}
         error={sidebarError}
+        inviteInput={inviteInput}
+        joiningInvite={joiningInvite}
         onSearchChange={setSearch}
+        onInviteInputChange={setInviteInput}
+        onJoinInvite={() => joinInviteCode(inviteInput)}
         onSelectConversation={selectConversation}
         onStartDirect={handleStartDirect}
         onOpenCreateGroup={() => setCreateGroupOpen(true)}
@@ -686,14 +834,21 @@ export function ChatPage() {
         memberSearch={memberSearch}
         memberSearchResults={memberSearchResults}
         groupNameDraft={groupNameDraft}
+        inviteLinks={inviteLinks}
+        inviteLinkBaseUrl={`${window.location.origin}/chat?invite=`}
+        inviteLoading={inviteLoading}
         loading={membersLoading}
         error={detailsError}
+        notice={detailsNotice}
         onClose={() => setDetailsOpen(false)}
         onMemberSearchChange={setMemberSearch}
         onGroupNameDraftChange={setGroupNameDraft}
         onSaveGroupName={saveGroupName}
         onAddMember={addMember}
         onRemoveMember={removeMember}
+        onCreateInviteLink={createInviteLink}
+        onCopyInviteLink={copyInviteLink}
+        onRevokeInviteLink={revokeInviteLink}
       />
     </div>
   );

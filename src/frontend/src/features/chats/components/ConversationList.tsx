@@ -1,4 +1,4 @@
-import { Archive, BellOff, LogOut, MessageCircle, Pin, PinOff, Plus, Search, Users } from 'lucide-react';
+import { Archive, BellOff, Link2, LogOut, MessageCircle, Pin, PinOff, Plus, Search, Users } from 'lucide-react';
 import { Avatar } from '../../../shared/components/Avatar';
 import { formatConversationTime } from '../../../shared/utils/time';
 import type { User } from '../../auth/types';
@@ -13,7 +13,11 @@ type ConversationListProps = {
   users: SearchUser[];
   loading: boolean;
   error: string;
+  inviteInput: string;
+  joiningInvite: boolean;
   onSearchChange: (value: string) => void;
+  onInviteInputChange: (value: string) => void;
+  onJoinInvite: () => void;
   onSelectConversation: (conversation: Conversation) => void;
   onStartDirect: (user: SearchUser) => void;
   onOpenCreateGroup: () => void;
@@ -31,7 +35,11 @@ export function ConversationList({
   users,
   loading,
   error,
+  inviteInput,
+  joiningInvite,
   onSearchChange,
+  onInviteInputChange,
+  onJoinInvite,
   onSelectConversation,
   onStartDirect,
   onOpenCreateGroup,
@@ -76,6 +84,32 @@ export function ConversationList({
           <Plus size={19} />
         </button>
       </div>
+
+      <form
+        className="invite-join"
+        onSubmit={event => {
+          event.preventDefault();
+          onJoinInvite();
+        }}
+      >
+        <label className="search-field">
+          <Link2 size={17} />
+          <input
+            value={inviteInput}
+            onChange={event => onInviteInputChange(event.target.value)}
+            placeholder="Invite code or link"
+          />
+        </label>
+        <button
+          className="icon-button"
+          type="submit"
+          disabled={joiningInvite || inviteInput.trim().length === 0}
+          aria-label="Join invite"
+          title="Join invite"
+        >
+          <Users size={18} />
+        </button>
+      </form>
 
       <div className="conversation-scroll">
         {error && <div className="state-banner error">{error}</div>}

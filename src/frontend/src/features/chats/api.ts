@@ -1,5 +1,14 @@
 import { apiClient } from '../../shared/api/client';
-import type { Attachment, Conversation, GroupMember, Message, MessageSearchResponse, MessagesResponse } from './types';
+import type {
+  Attachment,
+  Conversation,
+  GroupMember,
+  InviteLink,
+  InvitePreview,
+  Message,
+  MessageSearchResponse,
+  MessagesResponse,
+} from './types';
 
 export async function getConversations() {
   const { data } = await apiClient.get<Conversation[]>('/conversations');
@@ -112,5 +121,30 @@ export async function addGroupMembers(conversationId: string, members: string[])
 
 export async function removeGroupMember(conversationId: string, userId: string) {
   const { data } = await apiClient.delete<GroupMember[]>(`/groups/${conversationId}/members/${userId}`);
+  return data;
+}
+
+export async function getGroupInviteLinks(conversationId: string) {
+  const { data } = await apiClient.get<InviteLink[]>(`/groups/${conversationId}/invites`);
+  return data;
+}
+
+export async function createGroupInviteLink(conversationId: string) {
+  const { data } = await apiClient.post<InviteLink>(`/groups/${conversationId}/invites`);
+  return data;
+}
+
+export async function revokeGroupInviteLink(conversationId: string, inviteId: string) {
+  const { data } = await apiClient.delete<InviteLink>(`/groups/${conversationId}/invites/${inviteId}`);
+  return data;
+}
+
+export async function previewInviteLink(code: string) {
+  const { data } = await apiClient.get<InvitePreview>(`/groups/invites/${code}`);
+  return data;
+}
+
+export async function joinGroupByInvite(code: string) {
+  const { data } = await apiClient.post<Conversation>(`/groups/invites/${code}/join`);
   return data;
 }

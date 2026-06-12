@@ -96,3 +96,30 @@ export type GroupMember = {
   joinedAt: string;
   user: SearchUser;
 };
+
+export type InviteLink = {
+  id: string;
+  groupId: string;
+  code: string;
+  createdById: string;
+  expiresAt?: string | null;
+  maxUses?: number | null;
+  usedCount: number;
+  revokedAt?: string | null;
+  createdAt: string;
+  createdBy?: {
+    id: string;
+    username: string;
+  };
+};
+
+export type InvitePreview = {
+  code: string;
+  group: {
+    id: string;
+    conversationId: string;
+    name: string;
+    avatar?: string | null;
+    memberCount: number;
+  };
+};

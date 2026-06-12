@@ -1,8 +1,8 @@
-import { Plus, Trash2, X } from 'lucide-react';
+import { Copy, Link2, Plus, Trash2, X } from 'lucide-react';
 import { Avatar } from '../../../shared/components/Avatar';
 import type { User } from '../../auth/types';
 import type { SearchUser } from '../../users/types';
-import type { Conversation, GroupMember } from '../types';
+import type { Conversation, GroupMember, InviteLink } from '../types';
 
 type ConversationDetailsProps = {
   open: boolean;
@@ -12,14 +12,21 @@ type ConversationDetailsProps = {
   memberSearch: string;
   memberSearchResults: SearchUser[];
   groupNameDraft: string;
+  inviteLinks: InviteLink[];
+  inviteLinkBaseUrl: string;
+  inviteLoading: boolean;
   loading: boolean;
   error: string;
+  notice: string;
   onClose: () => void;
   onMemberSearchChange: (value: string) => void;
   onGroupNameDraftChange: (value: string) => void;
   onSaveGroupName: () => void;
   onAddMember: (user: SearchUser) => void;
   onRemoveMember: (userId: string) => void;
+  onCreateInviteLink: () => void;
+  onCopyInviteLink: (invite: InviteLink) => void;
+  onRevokeInviteLink: (inviteId: string) => void;
 };
 
 export function ConversationDetails({
@@ -30,14 +37,21 @@ export function ConversationDetails({
   memberSearch,
   memberSearchResults,
   groupNameDraft,
+  inviteLinks,
+  inviteLinkBaseUrl,
+  inviteLoading,
   loading,
   error,
+  notice,
   onClose,
   onMemberSearchChange,
   onGroupNameDraftChange,
   onSaveGroupName,
   onAddMember,
   onRemoveMember,
+  onCreateInviteLink,
+  onCopyInviteLink,
+  onRevokeInviteLink,
 }: ConversationDetailsProps) {
   if (!open || !conversation) return null;
 
@@ -118,10 +132,65 @@ export function ConversationDetails({
                 </div>
               </div>
             )}
+
+            {canManage && (
+              <div className="details-section">
+                <div className="details-section-header">
+                  <label>Invite links</label>
+                  <button
+                    className="mini-icon-button"
+                    type="button"
+                    onClick={onCreateInviteLink}
+                    disabled={inviteLoading}
+                    title="Create invite link"
+                  >
+                    <Link2 size={15} />
+                  </button>
+                </div>
+                {inviteLoading && <div className="state-banner flush">Loading invites...</div>}
+                <div className="invite-list">
+                  {inviteLinks.map(invite => {
+                    const revoked = Boolean(invite.revokedAt);
+                    const expired = invite.expiresAt ? new Date(invite.expiresAt) <= new Date() : false;
+                    const status = revoked ? 'Revoked' : expired ? 'Expired' : `${invite.usedCount} uses`;
+                    return (
+                      <div className={`invite-row ${revoked || expired ? 'inactive' : ''}`} key={invite.id}>
+                        <span>
+                          <strong>{inviteLinkBaseUrl}{invite.code}</strong>
+                          <small>{status}</small>
+                        </span>
+                        <button
+                          className="mini-icon-button"
+                          type="button"
+                          onClick={() => onCopyInviteLink(invite)}
+                          disabled={revoked || expired}
+                          title="Copy invite link"
+                        >
+                          <Copy size={14} />
+                        </button>
+                        <button
+                          className="mini-icon-button"
+                          type="button"
+                          onClick={() => onRevokeInviteLink(invite.id)}
+                          disabled={revoked}
+                          title="Revoke invite link"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
+                    );
+                  })}
+                  {!inviteLoading && inviteLinks.length === 0 && (
+                    <div className="state-banner flush">No invite links</div>
+                  )}
+                </div>
+              </div>
+            )}
           </>
         )}
 
         {error && <div className="state-banner error">{error}</div>}
+        {notice && !error && <div className="state-banner">{notice}</div>}
       </div>
     </aside>
   );
