@@ -25,6 +25,7 @@ type ConversationDetailsProps = {
   mediaAttachments: Attachment[];
   fileAttachments: Attachment[];
   linkPreviews: LinkPreview[];
+  linkFilter: 'all' | 'contact' | 'me';
   attachmentsLoading: boolean;
   loading: boolean;
   error: string;
@@ -33,6 +34,7 @@ type ConversationDetailsProps = {
   onMemberSearchChange: (value: string) => void;
   onGroupNameDraftChange: (value: string) => void;
   onAnnouncementDraftChange: (value: string) => void;
+  onLinkFilterChange: (value: 'all' | 'contact' | 'me') => void;
   onSaveGroupName: () => void;
   onSaveAnnouncement: () => void;
   onAddMember: (user: SearchUser) => void;
@@ -57,6 +59,7 @@ export function ConversationDetails({
   mediaAttachments,
   fileAttachments,
   linkPreviews,
+  linkFilter,
   attachmentsLoading,
   loading,
   error,
@@ -65,6 +68,7 @@ export function ConversationDetails({
   onMemberSearchChange,
   onGroupNameDraftChange,
   onAnnouncementDraftChange,
+  onLinkFilterChange,
   onSaveGroupName,
   onSaveAnnouncement,
   onAddMember,
@@ -147,14 +151,23 @@ export function ConversationDetails({
         </div>
 
         <div className="details-section">
-          <label>Links</label>
+          <div className="details-section-header">
+            <label>Links</label>
+            {conversation.type === 'direct' && (
+              <span className="segmented-control compact">
+                <button type="button" className={linkFilter === 'all' ? 'active' : ''} onClick={() => onLinkFilterChange('all')}>All</button>
+                <button type="button" className={linkFilter === 'contact' ? 'active' : ''} onClick={() => onLinkFilterChange('contact')}>Contact</button>
+                <button type="button" className={linkFilter === 'me' ? 'active' : ''} onClick={() => onLinkFilterChange('me')}>Me</button>
+              </span>
+            )}
+          </div>
           <div className="link-list">
             {linkPreviews.map(link => (
               <a className="shared-link-row" href={link.url} target="_blank" rel="noreferrer" key={link.id}>
                 <Link2 size={18} />
                 <span>
                   <strong>{link.title}</strong>
-                  <small>{link.url}</small>
+                  <small>{link.hostname || link.url}</small>
                   <em>{link.sender?.username || 'User'} · {link.content}</em>
                 </span>
               </a>

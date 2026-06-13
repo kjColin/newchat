@@ -364,9 +364,9 @@
 
 **Query**:
 
-`?limit=40&beforeCreatedAt=<iso-timestamp>&beforeId=<message-id>`
+`?limit=40&senderId=<user-id>&beforeCreatedAt=<iso-timestamp>&beforeId=<message-id>`
 
-分页使用消息的 `(createdAt, id)` cursor；同一条消息内的多个链接会分别返回。
+分页使用消息的 `(createdAt, id)` cursor；同一条消息内的多个链接会分别返回。`senderId` 可选，用于单聊资料页按联系人/自己筛选历史链接。
 
 **Response** (200)
 ```json
@@ -376,6 +376,7 @@
       "id": "message-id:https://example.com",
       "url": "https://example.com",
       "title": "example.com",
+      "hostname": "example.com",
       "messageId": "uuid",
       "conversationId": "uuid",
       "content": "message text",

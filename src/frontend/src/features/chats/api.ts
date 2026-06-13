@@ -102,7 +102,7 @@ export async function getConversationAttachments(
 
 export async function getConversationLinks(
   conversationId: string,
-  options: { limit?: number; beforeCreatedAt?: string; beforeId?: string } = {},
+  options: { limit?: number; beforeCreatedAt?: string; beforeId?: string; senderId?: string } = {},
 ) {
   const { data } = await apiClient.get<LinksResponse>(`/messages/${conversationId}/links`, {
     params: options,

@@ -125,6 +125,10 @@ export class ListLinksQueryDto {
   limit?: number;
 
   @IsOptional()
+  @IsString()
+  senderId?: string;
+
+  @IsOptional()
   @IsISO8601()
   beforeCreatedAt?: string;
 

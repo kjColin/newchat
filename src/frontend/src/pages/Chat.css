@@ -1332,6 +1332,38 @@
   gap: 10px;
 }
 
+.segmented-control {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px;
+  background: var(--surface-muted);
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+}
+
+.segmented-control button {
+  height: 28px;
+  padding: 0 9px;
+  color: var(--muted);
+  background: transparent;
+  border: 0;
+  border-radius: 6px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.segmented-control button.active {
+  color: var(--text);
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.1);
+}
+
+.segmented-control.compact button {
+  height: 26px;
+  padding: 0 8px;
+}
+
 .inline-edit {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;

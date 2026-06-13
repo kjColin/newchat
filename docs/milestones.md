@@ -62,6 +62,7 @@
 | 频道基础/发现/订阅 | fullstack | ✅ |
 | 公开群目录/发现/加入 | fullstack | ✅ |
 | 隐私设置 | fullstack | ✅ |
+| 联系人历史链接筛选 | fullstack | ✅ |
 | 性能优化 | all | ⏳ |
 
 **交付物**:

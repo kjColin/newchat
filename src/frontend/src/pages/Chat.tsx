@@ -194,6 +194,7 @@ export function ChatPage() {
   const [mediaAttachments, setMediaAttachments] = useState<Attachment[]>([]);
   const [fileAttachments, setFileAttachments] = useState<Attachment[]>([]);
   const [linkPreviews, setLinkPreviews] = useState<LinkPreview[]>([]);
+  const [linkFilter, setLinkFilter] = useState<'all' | 'contact' | 'me'>('all');
   const [attachmentsLoading, setAttachmentsLoading] = useState(false);
   const [memberSearch, setMemberSearch] = useState('');
   const [memberSearchResults, setMemberSearchResults] = useState<SearchUser[]>([]);
@@ -1153,6 +1154,20 @@ export function ChatPage() {
     }
   };
 
+  const loadConversationLinks = async (conversation: Conversation, filter: 'all' | 'contact' | 'me') => {
+    const senderId = conversation.type !== 'direct' || filter === 'all'
+      ? undefined
+      : filter === 'me'
+        ? currentUser.id
+        : conversation.user?.id;
+
+    const linksData = await getConversationLinks(conversation.id, {
+      limit: 40,
+      senderId,
+    });
+    setLinkPreviews(linksData.links);
+  };
+
   const openDetails = async () => {
     if (!activeConversation) return;
     setDetailsOpen(true);
@@ -1163,6 +1178,7 @@ export function ChatPage() {
     setMediaAttachments([]);
     setFileAttachments([]);
     setLinkPreviews([]);
+    setLinkFilter('all');
     setGroupNameDraft(activeConversation.name);
     setAnnouncementDraft(activeConversation.announcement || '');
     setMemberSearch('');
@@ -1170,13 +1186,12 @@ export function ChatPage() {
 
     setAttachmentsLoading(true);
     try {
-      const [attachmentsData, linksData] = await Promise.all([
-        getConversationAttachments(activeConversation.id, { limit: 80 }),
-        getConversationLinks(activeConversation.id, { limit: 40 }),
-      ]);
+      const attachmentsPromise = getConversationAttachments(activeConversation.id, { limit: 80 });
+      const linksPromise = loadConversationLinks(activeConversation, 'all');
+      const attachmentsData = await attachmentsPromise;
+      await linksPromise;
       setMediaAttachments(attachmentsData.attachments.filter(attachment => attachment.kind !== 'file'));
       setFileAttachments(attachmentsData.attachments.filter(attachment => attachment.kind === 'file'));
-      setLinkPreviews(linksData.links);
     } catch (error: any) {
       setDetailsError(error.response?.data?.message || 'Could not load shared content');
     } finally {
@@ -1203,6 +1218,20 @@ export function ChatPage() {
     } finally {
       setMembersLoading(false);
       setInviteLoading(false);
+    }
+  };
+
+  const changeLinkFilter = async (filter: 'all' | 'contact' | 'me') => {
+    if (!activeConversation) return;
+    setLinkFilter(filter);
+    setAttachmentsLoading(true);
+    setDetailsError('');
+    try {
+      await loadConversationLinks(activeConversation, filter);
+    } catch (error: any) {
+      setDetailsError(error.response?.data?.message || 'Could not load links');
+    } finally {
+      setAttachmentsLoading(false);
     }
   };
 
@@ -1532,6 +1561,7 @@ export function ChatPage() {
         mediaAttachments={mediaAttachments}
         fileAttachments={fileAttachments}
         linkPreviews={linkPreviews}
+        linkFilter={linkFilter}
         attachmentsLoading={attachmentsLoading}
         loading={membersLoading}
         error={detailsError}
@@ -1540,6 +1570,7 @@ export function ChatPage() {
         onMemberSearchChange={setMemberSearch}
         onGroupNameDraftChange={setGroupNameDraft}
         onAnnouncementDraftChange={setAnnouncementDraft}
+        onLinkFilterChange={changeLinkFilter}
         onSaveGroupName={saveGroupName}
         onSaveAnnouncement={saveAnnouncement}
         onAddMember={addMember}

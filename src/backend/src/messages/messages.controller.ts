@@ -53,6 +53,7 @@ export class MessagesController {
   ) {
     return this.messagesService.listLinks(conversationId, req.user.userId, {
       limit: query.limit || 40,
+      senderId: query.senderId,
       beforeCreatedAt: query.beforeCreatedAt,
       beforeId: query.beforeId,
     });

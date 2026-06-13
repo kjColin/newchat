@@ -208,7 +208,7 @@ export class MessagesService {
   async listLinks(
     conversationId: string,
     userId: string,
-    options: { limit?: number; beforeCreatedAt?: string; beforeId?: string } = {},
+    options: { limit?: number; beforeCreatedAt?: string; beforeId?: string; senderId?: string } = {},
   ) {
     await this.ensureParticipant(conversationId, userId);
 
@@ -218,6 +218,10 @@ export class MessagesService {
       deletedAt: null,
       content: { contains: 'http', mode: 'insensitive' },
     };
+
+    if (options.senderId) {
+      where.senderId = options.senderId;
+    }
 
     if (options.beforeCreatedAt && options.beforeId) {
       const beforeDate = new Date(options.beforeCreatedAt);
@@ -248,6 +252,7 @@ export class MessagesService {
         id: `${message.id}:${url}`,
         url,
         title: this.linkTitle(url),
+        hostname: this.linkHostname(url),
         messageId: message.id,
         conversationId: message.conversationId,
         content: message.content,
@@ -586,11 +591,15 @@ export class MessagesService {
   }
 
   private linkTitle(url: string) {
+    return this.linkHostname(url) || url;
+  }
+
+  private linkHostname(url: string) {
     try {
       const parsed = new URL(url);
       return parsed.hostname.replace(/^www\./, '');
     } catch {
-      return url;
+      return '';
     }
   }
 

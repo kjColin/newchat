@@ -113,6 +113,7 @@ export type LinkPreview = {
   id: string;
   url: string;
   title: string;
+  hostname?: string;
   messageId: string;
   conversationId: string;
   content: string;
