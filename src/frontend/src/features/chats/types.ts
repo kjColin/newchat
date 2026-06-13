@@ -81,10 +81,12 @@ export type Conversation = {
   id: string;
   conversationId: string;
   groupId?: string;
-  type: 'direct' | 'group';
+  channelId?: string;
+  type: 'direct' | 'group' | 'channel';
   name: string;
   avatar?: string | null;
   announcement?: string | null;
+  description?: string | null;
   memberCount: number;
   role?: string;
   lastMessage?: Message | null;
@@ -151,8 +153,9 @@ export type PinnedMessagesResponse = {
 export type GroupMember = {
   id: string;
   userId: string;
-  groupId: string;
-  role: 'owner' | 'admin' | 'member';
+  groupId?: string;
+  channelId?: string;
+  role: 'owner' | 'admin' | 'member' | 'subscriber';
   joinedAt: string;
   user: SearchUser;
 };

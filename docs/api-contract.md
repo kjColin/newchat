@@ -167,9 +167,11 @@
   {
     "id": "uuid",
     "conversationId": "uuid",
-    "type": "direct|group",
+    "type": "direct|group|channel",
     "name": "string",
     "avatar": "url",
+    "description": "string|null",
+    "role": "owner|admin|member|subscriber",
     "memberCount": 2,
     "lastMessage": {},
     "unreadCount": 0,
@@ -266,6 +268,8 @@
 
 ### POST /api/messages
 发送消息
+
+频道会话仅允许 `owner` 或 `admin` 发送消息；普通订阅者会返回 403。
 
 **Request**
 ```json
@@ -408,7 +412,7 @@
 ```
 
 ### POST /api/messages/:messageId/pin
-置顶一条可访问且未删除的消息。单聊成员可置顶；群聊要求当前用户为 owner 或 admin。
+置顶一条可访问且未删除的消息。单聊成员可置顶；群聊和频道要求当前用户为 owner 或 admin。
 
 **Response** (201)
 ```json
@@ -573,6 +577,68 @@
 
 **Response** (201)
 返回加入后的 group conversation 对象，结构与 `GET /api/conversations` 中群会话一致。
+
+---
+
+## 频道 API
+
+### POST /api/channels
+创建频道。创建者会成为频道 owner，并自动加入关联会话。
+
+**Request**
+```json
+{
+  "name": "string",
+  "description": "optional description",
+  "avatar": "optional url"
+}
+```
+
+**Response** (201)
+返回 channel conversation 对象，结构与 `GET /api/conversations` 中频道会话一致。
+
+### PATCH /api/channels/:conversationId
+更新频道资料，要求当前用户为 owner 或 admin。
+
+**Request**
+```json
+{
+  "name": "string",
+  "description": "string",
+  "avatar": "url"
+}
+```
+
+`description` 或 `avatar` 为空字符串时会清空对应字段。
+
+**Response** (200)
+返回更新后的 channel conversation 对象。
+
+### GET /api/channels/:conversationId/members
+获取频道订阅者列表，要求当前用户已在频道关联会话中。
+
+**Response** (200)
+```json
+[
+  {
+    "id": "uuid",
+    "channelId": "uuid",
+    "userId": "uuid",
+    "role": "owner|admin|subscriber",
+    "joinedAt": "timestamp",
+    "user": {
+      "id": "uuid",
+      "username": "string",
+      "email": "string",
+      "avatar": null,
+      "status": "online",
+      "lastSeen": "timestamp"
+    }
+  }
+]
+```
+
+当前版本已支持频道创建、频道会话展示、频道详情和管理员发帖；公开频道目录、订阅/退订仍属于后续能力。
 
 ---
 

@@ -88,6 +88,30 @@ export class ConversationsService {
         );
       }
 
+      if (conversation.type === 'channel') {
+        const channelMembership = conversation.channel
+          ? await this.prisma.channelMember.findUnique({
+            where: {
+              userId_channelId: {
+                userId,
+                channelId: conversation.channel.id,
+              },
+            },
+            select: { role: true },
+          })
+          : null;
+
+        return this.formatChannelConversation(
+          conversation.channel,
+          conversation,
+          conversation.channel?._count.members || conversation.participants.length,
+          {
+            ...settings,
+            role: channelMembership?.role || 'subscriber',
+          },
+        );
+      }
+
       return this.formatGroupConversation(
         conversation.group,
         conversation,
@@ -153,6 +177,29 @@ export class ConversationsService {
     };
   }
 
+  formatChannelConversation(channel: any, conversation: any, subscriberCount: number, settings: any = {}) {
+    if (!channel) return null;
+
+    return {
+      id: conversation.id,
+      conversationId: conversation.id,
+      channelId: channel.id,
+      type: 'channel',
+      name: channel.name,
+      avatar: channel.avatar,
+      description: channel.description,
+      role: settings.role || 'subscriber',
+      memberCount: subscriberCount,
+      lastMessage: conversation.messages?.[0] || null,
+      unreadCount: settings.unreadCount || 0,
+      lastReadAt: settings.lastReadAt,
+      pinnedAt: settings.pinnedAt,
+      mutedUntil: settings.mutedUntil,
+      archivedAt: settings.archivedAt,
+      lastActivityAt: settings.lastActivityAt || conversation.updatedAt,
+    };
+  }
+
   private formatDirectConversation(conversation: any, currentUserId: string, settings: any = {}) {
     const other = conversation.participants.find(participant => participant.userId !== currentUserId)?.user;
 
@@ -207,6 +254,11 @@ export class ConversationsService {
   private conversationInclude() {
     return {
       group: { include: { _count: { select: { members: true } } } },
+      channel: {
+        include: {
+          _count: { select: { members: true } },
+        },
+      },
       participants: {
         include: {
           user: {

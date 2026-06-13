@@ -479,10 +479,28 @@ export class MessagesService {
       where: { id: conversationId },
       include: {
         participants: { select: { userId: true } },
+        channel: {
+          include: {
+            members: {
+              where: { userId },
+              select: { role: true },
+            },
+          },
+        },
       },
     });
 
-    if (!conversation || conversation.type !== 'direct') return;
+    if (!conversation) return;
+
+    if (conversation.type === 'channel') {
+      const role = conversation.channel?.members[0]?.role;
+      if (!role || !['owner', 'admin'].includes(role)) {
+        throw new ForbiddenException('Only channel admins can post');
+      }
+      return;
+    }
+
+    if (conversation.type !== 'direct') return;
 
     const targetUserId = conversation.participants.find(participant => participant.userId !== userId)?.userId;
     if (!targetUserId) return;
@@ -513,10 +531,26 @@ export class MessagesService {
             },
           },
         },
+        channel: {
+          include: {
+            members: {
+              where: { userId },
+              select: { role: true },
+            },
+          },
+        },
       },
     });
 
     if (!conversation) throw new NotFoundException('Conversation not found');
+    if (conversation.type === 'channel') {
+      const role = conversation.channel?.members[0]?.role;
+      if (!role || !['owner', 'admin'].includes(role)) {
+        throw new ForbiddenException('Admin permission required');
+      }
+      return;
+    }
+
     if (conversation.type !== 'group') return;
 
     const role = conversation.group?.members[0]?.role;

@@ -10,6 +10,12 @@ type ChatHeaderProps = {
 };
 
 export function ChatHeader({ conversation, typingText, onBack, onOpenDetails }: ChatHeaderProps) {
+  const subtitle = conversation.type === 'channel'
+    ? `${conversation.memberCount} subscribers`
+    : conversation.type === 'group'
+      ? `${conversation.memberCount} members`
+      : conversation.user?.status || 'direct';
+
   return (
     <header className="chat-panel-header">
       <button className="icon-button mobile-only" type="button" onClick={onBack} aria-label="Back" title="Back">
@@ -18,7 +24,7 @@ export function ChatHeader({ conversation, typingText, onBack, onOpenDetails }: 
       <Avatar name={conversation.name} src={conversation.avatar} status={conversation.user?.status} />
       <div className="chat-title">
         <strong>{conversation.name}</strong>
-        <span>{typingText || (conversation.type === 'group' ? `${conversation.memberCount} members` : conversation.user?.status || 'direct')}</span>
+        <span>{typingText || subtitle}</span>
       </div>
       <button className="icon-button" type="button" onClick={onOpenDetails} aria-label="Conversation details" title="Conversation details">
         <Users size={19} />

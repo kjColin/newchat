@@ -27,6 +27,14 @@ export async function createGroup(name: string, memberIds: string[]) {
   return data;
 }
 
+export async function createChannel(name: string, description?: string) {
+  const { data } = await apiClient.post<Conversation>('/channels', {
+    name,
+    description,
+  });
+  return data;
+}
+
 export async function createDirectConversation(userId: string) {
   const { data } = await apiClient.post<Conversation>('/conversations/direct', { userId });
   return data;
@@ -148,8 +156,18 @@ export async function updateGroup(conversationId: string, payload: { name?: stri
   return data;
 }
 
+export async function updateChannel(conversationId: string, payload: { name?: string; avatar?: string; description?: string }) {
+  const { data } = await apiClient.patch<Conversation>(`/channels/${conversationId}`, payload);
+  return data;
+}
+
 export async function getGroupMembers(conversationId: string) {
   const { data } = await apiClient.get<GroupMember[]>(`/groups/${conversationId}/members`);
+  return data;
+}
+
+export async function getChannelMembers(conversationId: string) {
+  const { data } = await apiClient.get<GroupMember[]>(`/channels/${conversationId}/members`);
   return data;
 }
 

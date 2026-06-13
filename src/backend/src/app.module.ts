@@ -6,6 +6,7 @@ import { MessagesModule } from './messages/messages.module';
 import { GroupsModule } from './groups/groups.module';
 import { ConversationsModule } from './conversations/conversations.module';
 import { FilesModule } from './files/files.module';
+import { ChannelsModule } from './channels/channels.module';
 
 @Module({
   imports: [
@@ -16,6 +17,7 @@ import { FilesModule } from './files/files.module';
     MessagesModule,
     GroupsModule,
     FilesModule,
+    ChannelsModule,
   ],
 })
 export class AppModule {}

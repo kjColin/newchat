@@ -25,6 +25,8 @@ model User {
   attachments        Attachment[]
   pinnedMessages     PinnedMessage[]
   createdInviteLinks InviteLink[]
+  ownedChannels      Channel[]
+  channelMemberships ChannelMember[]
   contacts           Contact[]  @relation("ContactOwner")
   contactedBy        Contact[]  @relation("ContactUser")
   blockedUsers       BlockList[] @relation("Blocker")
@@ -41,6 +43,7 @@ model Conversation {
   messages     Message[]
   participants UserConversation[]
   group        Group?
+  channel      Channel?
   pinned       PinnedMessage[]
 }
 
@@ -137,6 +140,37 @@ model Group {
   conversation Conversation  @relation(fields: [conversationId], references: [id])
   members      GroupMember[]
   inviteLinks  InviteLink[]
+}
+
+model Channel {
+  id             String   @id @default(uuid())
+  name           String
+  description    String?
+  avatar         String?
+  ownerId        String
+  conversationId String   @unique
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  owner        User            @relation(fields: [ownerId], references: [id])
+  conversation Conversation    @relation(fields: [conversationId], references: [id])
+  members      ChannelMember[]
+
+  @@index([ownerId])
+}
+
+model ChannelMember {
+  id        String   @id @default(uuid())
+  userId    String
+  channelId String
+  role      String   @default("subscriber") // owner, admin, subscriber
+  joinedAt  DateTime @default(now())
+
+  user    User    @relation(fields: [userId], references: [id])
+  channel Channel @relation(fields: [channelId], references: [id])
+
+  @@unique([userId, channelId])
+  @@index([channelId, role])
 }
 
 model InviteLink {

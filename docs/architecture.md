@@ -16,13 +16,13 @@ NewChat 是一个面向即时通讯场景的 Web 聊天应用，目标体验参�
 ### 2.1 产品目标
 
 - 支持用户注册、登录、个人资料与头像编辑。
-- 支持用户搜索、单聊、群聊、群成员管理、群邀请链接。
+- 支持用户搜索、单聊、群聊、频道、群成员管理、群邀请链接。
 - 支持实时消息、输入中、在线状态、已读状态。
 - 支持消息编辑、删除、表情反应、回复、转发。
 - 支持图片、文件、语音等附件消息。
 - 支持会话置顶、免打扰、归档、未读统计。
 - 支持消息搜索、会话内搜索、媒体/文件/链接列表、站内通知和浏览器通知。
-- 支持后续扩展频道、公开群、机器人接口。
+- 支持后续扩展公开群/频道目录、机器人接口。
 
 ### 2.2 工程目标
 
@@ -68,7 +68,7 @@ NewChat 是一个面向即时通讯场景的 Web 聊天应用，目标体验参�
 ┌───────────────────────▼──────────────────────┐
 │          Application / Domain Layer           │
 │ Auth / Users / Conversations / Messages      │
-│ Groups / Files / Presence / Notifications    │
+│ Groups / Channels / Files / Notifications    │
 └───────────────────────┬──────────────────────┘
                         │
               Prisma Repository Access
@@ -159,12 +159,13 @@ UI Event
 | `ConversationsModule` | 单聊/群聊会话创建、会话列表、置顶、免打扰、归档 |
 | `MessagesModule` | 消息发送、历史、分页、编辑、删除、回复、转发、反应、已读 |
 | `GroupsModule` | 群信息、成员、角色、权限、邀请链接 |
+| `ChannelsModule` | 频道资料、频道成员、频道发言权限 |
 | `FilesModule` | 文件上传、下载、附件元数据、缩略图 |
 | `PresenceModule` | 在线状态、多设备连接、最后在线时间 |
 | `NotificationsModule` | 站内通知、Web Push、未读提醒 |
 | `SearchModule` | 用户、会话、消息全文搜索 |
 
-当前代码中 `GroupsService` 同时承担单聊会话、群聊会话和群成员管理。建议下一步抽出 `ConversationsService`，把 `createDirect`、`findByUser`、`updateSettings` 移入会话模块，`GroupsService` 只保留群资料和成员权限。
+当前代码中会话列表、单聊创建和会话设置已由 `ConversationsService` 负责；`GroupsService` 保留群资料、成员和邀请链接，`ChannelsService` 负责频道资料、成员和发言权限。
 
 ### 6.2 后端分层
 
@@ -198,13 +199,15 @@ PostgreSQL
 | 模型 | 说明 |
 | --- | --- |
 | `User` | 用户、邮箱、密码哈希、头像、在线状态 |
-| `Conversation` | 会话，区分 `direct` 和 `group` |
+| `Conversation` | 会话，区分 `direct`、`group` 和 `channel` |
 | `UserConversation` | 用户与会话关系，保存已读、置顶、免打扰、归档 |
 | `Message` | 消息主体，支持文本、编辑、软删除 |
 | `MessageReaction` | 消息表情反应 |
 | `PinnedMessage` | 会话置顶消息、置顶人和置顶时间 |
 | `Group` | 群资料、群公告、群主、关联会话 |
 | `GroupMember` | 群成员和角色 |
+| `Channel` | 频道资料、频道主、关联会话 |
+| `ChannelMember` | 频道订阅者和角色，owner/admin 可发帖 |
 | `Attachment` | 文件/图片等附件元数据 |
 | `InviteLink` | 群邀请链接、撤销状态、使用次数 |
 | `Contact` | 用户联系人关系和别名 |
@@ -268,6 +271,9 @@ REST API 负责可重放、可校验的命令和查询。
 | `DELETE` | `/api/groups/:conversationId/invites/:inviteId` | 撤销群邀请链接 |
 | `GET` | `/api/groups/invites/:code` | 预览邀请链接 |
 | `POST` | `/api/groups/invites/:code/join` | 通过邀请链接入群 |
+| `POST` | `/api/channels` | 创建频道 |
+| `PATCH` | `/api/channels/:conversationId` | 更新频道资料 |
+| `GET` | `/api/channels/:conversationId/members` | 频道订阅者列表 |
 | `POST` | `/api/files` | 上传附件 |
 
 ### 8.2 WebSocket Events
@@ -379,6 +385,7 @@ Client selects file
 - `UserConversation(userId, archivedAt, pinnedAt)`
 - `MessageReaction(messageId)`
 - `GroupMember(groupId, role)`
+- `ChannelMember(channelId, role)`
 - `User(username)`、`User(email)` 搜索索引
 
 ### 11.2 Socket 横向扩展
@@ -433,7 +440,7 @@ Data
 - 统一项目命名和部署目录，明确 `newchat` 与 `chat-app` 的关系。
 - 添加 `.gitignore`，排除 `node_modules`、`dist`、`.env`、备份文件。
 - 添加 `.env.example` 和配置校验。
-- 将 `GroupsService` 中的会话逻辑迁移到 `ConversationsService`。
+- 保持 `ConversationsService`、`GroupsService`、`ChannelsService` 的边界清晰。
 - 为 REST 请求补全 DTO。
 - 修复消息 cursor 分页。
 - 增加基础 e2e 测试：注册、登录、单聊、群聊、发消息。
@@ -451,8 +458,9 @@ Data
 
 ### P2：扩展能力
 
-- 频道 Channel。
+- 频道基础能力：创建频道、频道会话、频道详情、频道管理员发帖。
 - 公开群和群目录。
+- 公开频道目录、订阅/退订和频道发现。
 - 隐私设置。
 - 联系人资料页中的历史链接筛选和链接预览元数据增强。
 - Bot API 简化版。

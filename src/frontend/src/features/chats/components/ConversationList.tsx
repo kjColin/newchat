@@ -1,4 +1,4 @@
-import { Archive, BellOff, Link2, LogOut, MessageCircle, Pin, PinOff, Plus, Search, Settings, ShieldOff, UserCheck, UserMinus, Users } from 'lucide-react';
+import { Archive, BellOff, Link2, LogOut, MessageCircle, Pin, PinOff, Plus, Radio, Search, Settings, ShieldOff, UserCheck, UserMinus, Users } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { Avatar } from '../../../shared/components/Avatar';
 import { formatConversationTime } from '../../../shared/utils/time';
@@ -29,6 +29,7 @@ type ConversationListProps = {
   onBlockUser: (user: SearchUser) => void;
   onUnblockUser: (user: SearchUser) => void;
   onOpenCreateGroup: () => void;
+  onOpenCreateChannel: () => void;
   onOpenProfile: () => void;
   onLogout: () => void;
   onTogglePinned: (conversation: Conversation) => void;
@@ -59,6 +60,7 @@ export function ConversationList({
   onBlockUser,
   onUnblockUser,
   onOpenCreateGroup,
+  onOpenCreateChannel,
   onOpenProfile,
   onLogout,
   onTogglePinned,
@@ -101,6 +103,9 @@ export function ConversationList({
         </label>
         <button className="icon-button primary" type="button" onClick={onOpenCreateGroup} aria-label="New group" title="New group">
           <Plus size={19} />
+        </button>
+        <button className="icon-button" type="button" onClick={onOpenCreateChannel} aria-label="New channel" title="New channel">
+          <Radio size={18} />
         </button>
       </div>
 
@@ -245,7 +250,14 @@ export function ConversationList({
                 <Avatar name={conversation.name} src={conversation.avatar} status={conversation.user?.status} />
                 <span className="conversation-main">
                   <strong>{conversation.name}</strong>
-                  <small>{conversation.lastMessage?.content || (conversation.type === 'group' ? `${conversation.memberCount} members` : 'Direct message')}</small>
+                  <small>
+                    {conversation.lastMessage?.content ||
+                      (conversation.type === 'channel'
+                        ? `${conversation.memberCount} subscribers`
+                        : conversation.type === 'group'
+                          ? `${conversation.memberCount} members`
+                          : 'Direct message')}
+                  </small>
                 </span>
                 <span className="conversation-meta conversation-actions">
                   <span>{formatConversationTime(conversation.lastMessage?.createdAt || conversation.lastActivityAt)}</span>

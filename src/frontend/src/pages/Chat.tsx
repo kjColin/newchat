@@ -4,6 +4,7 @@ import { ArrowDown, MessageCircle, Pin, X } from 'lucide-react';
 import { authStore } from '../features/auth/auth-store';
 import type { User } from '../features/auth/types';
 import {
+  createChannel,
   createDirectConversation,
   createGroup,
   createGroupInviteLink,
@@ -11,6 +12,7 @@ import {
   editMessage,
   addGroupMembers,
   forwardMessage,
+  getChannelMembers,
   getConversations,
   getConversationAttachments,
   getConversationLinks,
@@ -39,6 +41,7 @@ import { MessageList } from '../features/chats/components/MessageList';
 import { connectChatSocket, joinConversation, startTyping, stopTyping } from '../features/chats/socket';
 import type { ChatSocket } from '../features/chats/socket';
 import type { Attachment, Conversation, GroupMember, InviteLink, LinkPreview, Message, PinnedMessage } from '../features/chats/types';
+import { CreateChannelModal } from '../features/channels/components/CreateChannelModal';
 import { CreateGroupModal } from '../features/groups/components/CreateGroupModal';
 import { ProfileModal } from '../features/users/components/ProfileModal';
 import {
@@ -163,12 +166,17 @@ export function ChatPage() {
   const [blockedUsers, setBlockedUsers] = useState<BlockedUserEntry[]>([]);
   const [mobileConversationOpen, setMobileConversationOpen] = useState(false);
   const [createGroupOpen, setCreateGroupOpen] = useState(false);
+  const [createChannelOpen, setCreateChannelOpen] = useState(false);
   const [groupName, setGroupName] = useState('');
   const [groupSearch, setGroupSearch] = useState('');
   const [groupSearchResults, setGroupSearchResults] = useState<SearchUser[]>([]);
   const [selectedMembers, setSelectedMembers] = useState<SearchUser[]>([]);
   const [createError, setCreateError] = useState('');
   const [creatingGroup, setCreatingGroup] = useState(false);
+  const [channelName, setChannelName] = useState('');
+  const [channelDescription, setChannelDescription] = useState('');
+  const [channelError, setChannelError] = useState('');
+  const [creatingChannel, setCreatingChannel] = useState(false);
   const [typingUsers, setTypingUsers] = useState<Record<string, string[]>>({});
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [members, setMembers] = useState<GroupMember[]>([]);
@@ -209,6 +217,10 @@ export function ChatPage() {
     [notifications],
   );
   const activeDirectBlocked = Boolean(activeConversation?.type === 'direct' && activeConversation.user?.isBlocked);
+  const activeChannelReadOnly = Boolean(
+    activeConversation?.type === 'channel' &&
+    !['owner', 'admin'].includes(activeConversation.role || ''),
+  );
   const syncSearchUser = useCallback((userId: string, updates: Partial<SearchUser>) => {
     setSearchResults(prev => prev.map(user => user.id === userId ? { ...user, ...updates } : user));
     setGroupSearchResults(prev => prev.map(user => user.id === userId ? { ...user, ...updates } : user));
@@ -906,6 +918,23 @@ export function ChatPage() {
     }
   };
 
+  const handleCreateChannel = async () => {
+    setCreatingChannel(true);
+    setChannelError('');
+    try {
+      const conversation = await createChannel(channelName.trim(), channelDescription.trim());
+      setConversations(prev => sortConversations(upsertConversation(prev, conversation)));
+      setCreateChannelOpen(false);
+      setChannelName('');
+      setChannelDescription('');
+      await selectConversation(conversation);
+    } catch (error: any) {
+      setChannelError(error.response?.data?.message || 'Could not create channel');
+    } finally {
+      setCreatingChannel(false);
+    }
+  };
+
   const logout = () => {
     authStore.clear();
     navigate('/login', { replace: true });
@@ -1047,15 +1076,17 @@ export function ChatPage() {
       setAttachmentsLoading(false);
     }
 
-    if (activeConversation.type !== 'group') return;
-
     setMembersLoading(true);
     setInviteLoading(true);
     try {
-      const nextMembers = await getGroupMembers(activeConversation.id);
+      const nextMembers = activeConversation.type === 'channel'
+        ? await getChannelMembers(activeConversation.id)
+        : activeConversation.type === 'group'
+          ? await getGroupMembers(activeConversation.id)
+          : [];
       setMembers(nextMembers);
       const currentMember = nextMembers.find(member => member.userId === currentUser.id);
-      if (currentMember?.role === 'owner' || currentMember?.role === 'admin') {
+      if (activeConversation.type === 'group' && (currentMember?.role === 'owner' || currentMember?.role === 'admin')) {
         setInviteLinks(await getGroupInviteLinks(activeConversation.id));
       } else {
         setInviteLinks([]);
@@ -1203,6 +1234,7 @@ export function ChatPage() {
         onBlockUser={handleBlockUser}
         onUnblockUser={handleUnblockUser}
         onOpenCreateGroup={() => setCreateGroupOpen(true)}
+        onOpenCreateChannel={() => setCreateChannelOpen(true)}
         onOpenProfile={openProfile}
         onLogout={logout}
         onTogglePinned={handleTogglePinned}
@@ -1297,9 +1329,12 @@ export function ChatPage() {
             {activeDirectBlocked && (
               <div className="state-banner error flush">Messaging is disabled for this conversation.</div>
             )}
+            {activeChannelReadOnly && (
+              <div className="state-banner flush">Only channel admins can post.</div>
+            )}
             <MessageComposer
               value={draft}
-              disabled={loadingMessages || activeDirectBlocked}
+              disabled={loadingMessages || activeDirectBlocked || activeChannelReadOnly}
               sending={sending}
               editing={Boolean(editingMessage)}
               replyTo={replyToMessage}
@@ -1336,6 +1371,18 @@ export function ChatPage() {
         onToggleUser={toggleMember}
         onSubmit={handleCreateGroup}
         onClose={() => setCreateGroupOpen(false)}
+      />
+
+      <CreateChannelModal
+        open={createChannelOpen}
+        name={channelName}
+        description={channelDescription}
+        submitting={creatingChannel}
+        error={channelError}
+        onNameChange={setChannelName}
+        onDescriptionChange={setChannelDescription}
+        onSubmit={handleCreateChannel}
+        onClose={() => setCreateChannelOpen(false)}
       />
 
       <ProfileModal

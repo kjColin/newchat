@@ -59,6 +59,7 @@
 | 搜索功能 | backend | ✅ |
 | 站内通知/浏览器通知 | frontend | ✅ |
 | 联系人/拉黑 | fullstack | ✅ |
+| 频道基础功能 | fullstack | ✅ |
 | 性能优化 | all | ⏳ |
 
 **交付物**:
@@ -91,7 +92,7 @@
 ```
 Milestone 1: ████████░░ 80%
 Milestone 2: ████████░░ 80%
-Milestone 3: ████████░░ 80%
+Milestone 3: █████████░ 90%
 Milestone 4: ░░░░░░░░░░  0%
 ```
 

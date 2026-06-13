@@ -76,9 +76,15 @@ export function ConversationDetails({
   if (!open || !conversation) return null;
 
   const isGroup = conversation.type === 'group';
+  const isChannel = conversation.type === 'channel';
   const currentMember = members.find(member => member.userId === currentUser.id);
   const canManage = currentMember?.role === 'owner' || currentMember?.role === 'admin';
   const existingIds = new Set(members.map(member => member.userId));
+  const profileMeta = isChannel
+    ? `${conversation.memberCount} subscribers`
+    : isGroup
+      ? `${conversation.memberCount} members`
+      : conversation.user?.email;
 
   return (
     <aside className="details-drawer">
@@ -93,8 +99,15 @@ export function ConversationDetails({
         <div className="details-profile">
           <Avatar name={conversation.name} src={conversation.avatar} status={conversation.user?.status} size="lg" />
           <strong>{conversation.name}</strong>
-          <span>{isGroup ? `${conversation.memberCount} members` : conversation.user?.email}</span>
+          <span>{profileMeta}</span>
         </div>
+
+        {isChannel && (
+          <div className="details-section">
+            <label>Description</label>
+            <div className="announcement-card">{conversation.description || 'No description'}</div>
+          </div>
+        )}
 
         <div className="details-section">
           <label>Media</label>
@@ -283,6 +296,22 @@ export function ConversationDetails({
               </div>
             )}
           </>
+        )}
+
+        {isChannel && (
+          <div className="details-section">
+            <label>Subscribers</label>
+            {loading && <div className="state-banner">Loading subscribers...</div>}
+            {members.map(member => (
+              <div className="member-row" key={member.id}>
+                <Avatar name={member.user.username} src={member.user.avatar} status={member.user.status} />
+                <span>
+                  <strong>{member.user.username}</strong>
+                  <small>{member.role}</small>
+                </span>
+              </div>
+            ))}
+          </div>
         )}
 
         {error && <div className="state-banner error">{error}</div>}
