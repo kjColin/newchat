@@ -85,6 +85,10 @@ export function ChatPage() {
   const navigate = useNavigate();
   const initialUser = useMemo(() => authStore.getUser(), []) as User | null;
   const [currentUser, setCurrentUser] = useState<User | null>(initialUser);
+  const safeCurrentUser = useMemo<User>(
+    () => currentUser || { id: '', username: '', email: '' },
+    [currentUser],
+  );
   const [draft, setDraft] = useState('');
   const [editingMessage, setEditingMessage] = useState<Message | null>(null);
   const [replyToMessage, setReplyToMessage] = useState<Message | null>(null);
@@ -185,7 +189,7 @@ export function ChatPage() {
     removeMember,
     applyProfileUpdate: applyDetailsProfileUpdate,
   } = useConversationDetails({
-    currentUser,
+    currentUser: safeCurrentUser,
     onConversationPatch: applyConversationPatch,
     onMemberCountChange: applyMemberCount,
   });
@@ -292,6 +296,8 @@ export function ChatPage() {
   );
 
   const selectConversation = useCallback(async (conversation: Conversation) => {
+    if (!currentUser) return;
+
     setActiveConversation(conversation);
     setReplyToMessage(null);
     setPendingAttachments([]);
@@ -305,7 +311,7 @@ export function ChatPage() {
       .then(setPinnedMessages)
       .catch(() => setPinnedMessages([]));
     await loadConversationMessages({ conversation, currentUserId: currentUser.id });
-  }, [currentUser.id, loadConversationMessages, markConversationNotificationsLocalRead, resetMessages]);
+  }, [currentUser, loadConversationMessages, markConversationNotificationsLocalRead, resetMessages]);
 
   const showMessageNotification = useCallback((message: Message) => {
     const conversation = conversationsRef.current.find(item => item.id === message.conversationId);
