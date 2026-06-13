@@ -516,6 +516,8 @@ socket.emit('typing:stop', { conversationId: 'uuid' })
 | `typing` | 输入状态变化 |
 | `presence:update` | 在线状态变化 |
 
+前端基于 `message` 事件生成站内通知和浏览器通知：仅当消息来自其他用户且不属于当前打开会话时提醒；点击通知会切换到对应会话并标记该通知已读。
+
 ---
 
 **Version**: 1.0

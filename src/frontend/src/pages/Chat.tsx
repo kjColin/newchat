@@ -42,6 +42,9 @@ import { CreateGroupModal } from '../features/groups/components/CreateGroupModal
 import { ProfileModal } from '../features/users/components/ProfileModal';
 import { getCurrentUser, searchUsers, updateCurrentUser } from '../features/users/api';
 import type { SearchUser } from '../features/users/types';
+import { getBrowserNotificationState, requestBrowserNotificationPermission, showBrowserNotification } from '../features/notifications/browser-notifications';
+import { NotificationMenu } from '../features/notifications/components/NotificationMenu';
+import type { BrowserNotificationState, NotificationItem } from '../features/notifications/types';
 import './Chat.css';
 
 function upsertConversation(list: Conversation[], conversation: Conversation) {
@@ -110,6 +113,13 @@ function parseInviteCode(value: string) {
   return trimmed;
 }
 
+function formatNotificationBody(message: Message) {
+  if (message.content.trim()) return message.content.trim();
+  const attachment = message.attachments?.[0];
+  if (attachment) return attachment.fileName;
+  return 'New message';
+}
+
 export function ChatPage() {
   const navigate = useNavigate();
   const initialUser = useMemo(() => authStore.getUser(), []) as User | null;
@@ -169,12 +179,21 @@ export function ChatPage() {
   const [profileSaving, setProfileSaving] = useState(false);
   const [profileError, setProfileError] = useState('');
   const [profileNotice, setProfileNotice] = useState('');
+  const [notifications, setNotifications] = useState<NotificationItem[]>([]);
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [browserNotificationState, setBrowserNotificationState] = useState<BrowserNotificationState>(() => getBrowserNotificationState());
   const activeConversationId = useRef<string | null>(null);
   const handledInviteCode = useRef<string | null>(null);
   const typingTimer = useRef<number | null>(null);
   const messageListRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const conversationsRef = useRef<Conversation[]>([]);
+  const selectConversationRef = useRef<(conversation: Conversation) => Promise<void>>();
   const pinnedMessageIds = useMemo(() => new Set(pinnedMessages.map(item => item.messageId)), [pinnedMessages]);
+  const unreadNotificationCount = useMemo(
+    () => notifications.filter(notification => !notification.read).length,
+    [notifications],
+  );
 
   const selectConversation = useCallback(async (conversation: Conversation) => {
     setActiveConversation(conversation);
@@ -190,6 +209,10 @@ export function ChatPage() {
     setShowJumpLatest(false);
     setDetailsOpen(false);
     setMobileConversationOpen(true);
+    setNotificationsOpen(false);
+    setNotifications(prev => prev.map(notification =>
+      notification.conversationId === conversation.id ? { ...notification, read: true } : notification
+    ));
     setLoadingMessages(true);
     setMessageError('');
     joinConversation(socket, conversation.id);
@@ -226,6 +249,32 @@ export function ChatPage() {
       setLoadingMessages(false);
     }
   }, [socket]);
+
+  const createMessageNotification = useCallback((message: Message) => {
+    const conversation = conversationsRef.current.find(item => item.id === message.conversationId);
+    const title = conversation?.name || message.sender?.username || 'New message';
+    const body = formatNotificationBody(message);
+    const item: NotificationItem = {
+      id: message.id,
+      conversationId: message.conversationId,
+      title,
+      body,
+      createdAt: message.createdAt,
+      read: false,
+    };
+
+    setNotifications(prev => {
+      const next = [item, ...prev.filter(notification => notification.id !== item.id)];
+      return next.slice(0, 30);
+    });
+
+    showBrowserNotification(title, body, () => {
+      const target = conversationsRef.current.find(conversation => conversation.id === message.conversationId);
+      if (target) {
+        selectConversationRef.current?.(target);
+      }
+    });
+  }, []);
 
   const joinInviteCode = useCallback(async (value: string, options: { clearUrl?: boolean } = {}) => {
     const code = parseInviteCode(value);
@@ -283,6 +332,14 @@ export function ChatPage() {
   }, [activeConversation?.id]);
 
   useEffect(() => {
+    conversationsRef.current = conversations;
+  }, [conversations]);
+
+  useEffect(() => {
+    selectConversationRef.current = selectConversation;
+  }, [selectConversation]);
+
+  useEffect(() => {
     if (socket && activeConversation?.id) {
       joinConversation(socket, activeConversation.id);
     }
@@ -321,6 +378,8 @@ export function ChatPage() {
         if (message.senderId !== currentUser?.id) {
           markConversationRead(message.conversationId).catch(() => undefined);
         }
+      } else if (message.senderId !== currentUser?.id) {
+        createMessageNotification(message);
       }
     });
     ws.on('message:updated', message => {
@@ -381,7 +440,7 @@ export function ChatPage() {
     return () => {
       ws.disconnect();
     };
-  }, [currentUser?.id]);
+  }, [createMessageNotification, currentUser?.id]);
 
   useEffect(() => {
     async function load() {
@@ -799,6 +858,28 @@ export function ChatPage() {
     }
   };
 
+  const enableBrowserNotifications = async () => {
+    const permission = await requestBrowserNotificationPermission();
+    setBrowserNotificationState(permission as BrowserNotificationState);
+  };
+
+  const selectNotification = async (notification: NotificationItem) => {
+    setNotifications(prev => prev.map(item => item.id === notification.id ? { ...item, read: true } : item));
+    const conversation = conversations.find(item => item.id === notification.conversationId);
+    if (conversation) {
+      await selectConversation(conversation);
+    }
+  };
+
+  const markAllNotificationsRead = () => {
+    setNotifications(prev => prev.map(notification => ({ ...notification, read: true })));
+  };
+
+  const clearNotifications = () => {
+    setNotifications([]);
+    setNotificationsOpen(false);
+  };
+
   const handleTogglePinned = async (conversation: Conversation) => {
     try {
       setConversations(sortConversations(await updateConversationSettings(conversation.id, { pinned: !conversation.pinnedAt })));
@@ -985,6 +1066,19 @@ export function ChatPage() {
         error={sidebarError}
         inviteInput={inviteInput}
         joiningInvite={joiningInvite}
+        notificationSlot={(
+          <NotificationMenu
+            open={notificationsOpen}
+            notifications={notifications}
+            unreadCount={unreadNotificationCount}
+            browserState={browserNotificationState}
+            onToggleOpen={() => setNotificationsOpen(prev => !prev)}
+            onEnableBrowserNotifications={enableBrowserNotifications}
+            onSelect={selectNotification}
+            onMarkAllRead={markAllNotificationsRead}
+            onClear={clearNotifications}
+          />
+        )}
         onSearchChange={setSearch}
         onInviteInputChange={setInviteInput}
         onJoinInvite={() => joinInviteCode(inviteInput)}

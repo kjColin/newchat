@@ -56,6 +56,7 @@
 | 消息已读状态 | backend | ✅ |
 | 用户头像/资料编辑 | fullstack | ✅ |
 | 搜索功能 | backend | ✅ |
+| 站内通知/浏览器通知 | frontend | ✅ |
 | 性能优化 | all | ⏳ |
 
 **交付物**:
@@ -88,7 +89,7 @@
 ```
 Milestone 1: ████████░░ 80%
 Milestone 2: ████████░░ 80%
-Milestone 3: ███████░░░ 70%
+Milestone 3: ████████░░ 80%
 Milestone 4: ░░░░░░░░░░  0%
 ```
 

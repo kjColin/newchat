@@ -1,4 +1,5 @@
 import { Archive, BellOff, Link2, LogOut, MessageCircle, Pin, PinOff, Plus, Search, Settings, Users } from 'lucide-react';
+import type { ReactNode } from 'react';
 import { Avatar } from '../../../shared/components/Avatar';
 import { formatConversationTime } from '../../../shared/utils/time';
 import type { User } from '../../auth/types';
@@ -7,6 +8,7 @@ import type { Conversation } from '../types';
 
 type ConversationListProps = {
   currentUser: User;
+  notificationSlot?: ReactNode;
   conversations: Conversation[];
   activeConversationId?: string;
   search: string;
@@ -30,6 +32,7 @@ type ConversationListProps = {
 
 export function ConversationList({
   currentUser,
+  notificationSlot,
   conversations,
   activeConversationId,
   search,
@@ -69,6 +72,7 @@ export function ConversationList({
           </span>
           <Settings size={15} />
         </button>
+        {notificationSlot}
         <button className="icon-button" type="button" onClick={onLogout} aria-label="Logout" title="Logout">
           <LogOut size={18} />
         </button>
