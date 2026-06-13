@@ -51,6 +51,7 @@
 |------|--------|------|
 | 文件上传/下载 | backend | ✅ |
 | 会话媒体/文件列表 | fullstack | ✅ |
+| 会话链接列表 | fullstack | ✅ |
 | 置顶消息 | fullstack | ✅ |
 | 群公告 | fullstack | ✅ |
 | 消息已读状态 | backend | ✅ |

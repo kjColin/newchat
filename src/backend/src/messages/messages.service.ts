@@ -3,6 +3,8 @@ import { PrismaService } from '../prisma/prisma.service';
 import { MessagesGateway } from './messages.gateway';
 import { CreateMessageDto } from './dto/message.dto';
 
+const URL_PATTERN = /https?:\/\/[^\s<>"')\]]+/gi;
+
 @Injectable()
 export class MessagesService {
   constructor(
@@ -199,6 +201,63 @@ export class MessagesService {
     return {
       attachments,
       hasMore: attachments.length === limit,
+    };
+  }
+
+  async listLinks(
+    conversationId: string,
+    userId: string,
+    options: { limit?: number; beforeCreatedAt?: string; beforeId?: string } = {},
+  ) {
+    await this.ensureParticipant(conversationId, userId);
+
+    const limit = Math.min(Math.max(options.limit || 40, 1), 100);
+    const where: any = {
+      conversationId,
+      deletedAt: null,
+      content: { contains: 'http', mode: 'insensitive' },
+    };
+
+    if (options.beforeCreatedAt && options.beforeId) {
+      const beforeDate = new Date(options.beforeCreatedAt);
+      where.OR = [
+        { createdAt: { lt: beforeDate } },
+        { createdAt: beforeDate, id: { lt: options.beforeId } },
+      ];
+    }
+
+    const messages = await this.prisma.message.findMany({
+      where,
+      orderBy: [
+        { createdAt: 'desc' },
+        { id: 'desc' },
+      ],
+      take: limit * 3,
+      select: {
+        id: true,
+        conversationId: true,
+        content: true,
+        createdAt: true,
+        sender: { select: { id: true, username: true, avatar: true } },
+      },
+    });
+
+    const links = messages.flatMap(message =>
+      this.extractLinks(message.content).map(url => ({
+        id: `${message.id}:${url}`,
+        url,
+        title: this.linkTitle(url),
+        messageId: message.id,
+        conversationId: message.conversationId,
+        content: message.content,
+        createdAt: message.createdAt,
+        sender: message.sender,
+      })),
+    ).slice(0, limit);
+
+    return {
+      links,
+      hasMore: messages.length === limit * 3,
     };
   }
 
@@ -456,6 +515,21 @@ export class MessagesService {
         include: this.messageInclude(),
       },
     };
+  }
+
+  private extractLinks(content: string) {
+    return Array.from(content.matchAll(URL_PATTERN))
+      .map(match => match[0].replace(/[.,!?;:]+$/, ''))
+      .filter((url, index, urls) => urls.indexOf(url) === index);
+  }
+
+  private linkTitle(url: string) {
+    try {
+      const parsed = new URL(url);
+      return parsed.hostname.replace(/^www\./, '');
+    } catch {
+      return url;
+    }
   }
 
   private messageInclude() {

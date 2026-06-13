@@ -21,7 +21,7 @@ NewChat 是一个面向即时通讯场景的 Web 聊天应用，目标体验参�
 - 支持消息编辑、删除、表情反应、回复、转发。
 - 支持图片、文件、语音等附件消息。
 - 支持会话置顶、免打扰、归档、未读统计。
-- 支持消息搜索、会话内搜索、媒体/文件列表、站内通知和浏览器通知。
+- 支持消息搜索、会话内搜索、媒体/文件/链接列表、站内通知和浏览器通知。
 - 支持后续扩展频道、公开群、机器人接口。
 
 ### 2.2 工程目标
@@ -264,6 +264,7 @@ REST API 负责可重放、可校验的命令和查询。
 | `POST` | `/api/messages` | 发送消息 |
 | `PATCH` | `/api/messages/:id` | 编辑消息 |
 | `DELETE` | `/api/messages/:id` | 删除消息 |
+| `GET` | `/api/messages/:conversationId/links` | 会话链接列表 |
 | `POST` | `/api/messages/:id/reactions` | 切换表情反应 |
 | `POST` | `/api/messages/:conversationId/read` | 标记已读 |
 | `POST` | `/api/groups` | 创建群 |
@@ -461,7 +462,7 @@ Data
 - 频道 Channel。
 - 公开群和群目录。
 - 联系人、拉黑、隐私设置。
-- 链接列表。
+- 联系人资料页中的历史链接筛选和链接预览元数据增强。
 - Bot API 简化版。
 - Redis adapter、消息队列、对象存储。
 

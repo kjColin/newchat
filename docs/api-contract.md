@@ -291,6 +291,38 @@
 }
 ```
 
+### GET /api/messages/:conversationId/links
+获取当前会话内未删除文本消息中的链接列表，用于会话详情中的链接视图。
+
+**Query**:
+
+`?limit=40&beforeCreatedAt=<iso-timestamp>&beforeId=<message-id>`
+
+分页使用消息的 `(createdAt, id)` cursor；同一条消息内的多个链接会分别返回。
+
+**Response** (200)
+```json
+{
+  "links": [
+    {
+      "id": "message-id:https://example.com",
+      "url": "https://example.com",
+      "title": "example.com",
+      "messageId": "uuid",
+      "conversationId": "uuid",
+      "content": "message text",
+      "createdAt": "timestamp",
+      "sender": {
+        "id": "uuid",
+        "username": "string",
+        "avatar": null
+      }
+    }
+  ],
+  "hasMore": false
+}
+```
+
 ### GET /api/messages/:conversationId/pinned
 获取当前会话置顶消息列表。
 

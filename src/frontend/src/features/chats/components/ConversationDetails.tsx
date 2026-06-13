@@ -2,7 +2,7 @@ import { Copy, FileText, Link2, Plus, Trash2, X } from 'lucide-react';
 import { Avatar } from '../../../shared/components/Avatar';
 import type { User } from '../../auth/types';
 import type { SearchUser } from '../../users/types';
-import type { Attachment, Conversation, GroupMember, InviteLink } from '../types';
+import type { Attachment, Conversation, GroupMember, InviteLink, LinkPreview } from '../types';
 
 function formatFileSize(size: number) {
   if (size < 1024) return `${size} B`;
@@ -24,6 +24,7 @@ type ConversationDetailsProps = {
   inviteLoading: boolean;
   mediaAttachments: Attachment[];
   fileAttachments: Attachment[];
+  linkPreviews: LinkPreview[];
   attachmentsLoading: boolean;
   loading: boolean;
   error: string;
@@ -55,6 +56,7 @@ export function ConversationDetails({
   inviteLoading,
   mediaAttachments,
   fileAttachments,
+  linkPreviews,
   attachmentsLoading,
   loading,
   error,
@@ -128,6 +130,25 @@ export function ConversationDetails({
           </div>
           {!attachmentsLoading && fileAttachments.length === 0 && (
             <div className="state-banner flush">No files</div>
+          )}
+        </div>
+
+        <div className="details-section">
+          <label>Links</label>
+          <div className="link-list">
+            {linkPreviews.map(link => (
+              <a className="shared-link-row" href={link.url} target="_blank" rel="noreferrer" key={link.id}>
+                <Link2 size={18} />
+                <span>
+                  <strong>{link.title}</strong>
+                  <small>{link.url}</small>
+                  <em>{link.sender?.username || 'User'} · {link.content}</em>
+                </span>
+              </a>
+            ))}
+          </div>
+          {!attachmentsLoading && linkPreviews.length === 0 && (
+            <div className="state-banner flush">No links</div>
           )}
         </div>
 

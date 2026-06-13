@@ -107,6 +107,26 @@ export type AttachmentsResponse = {
   hasMore: boolean;
 };
 
+export type LinkPreview = {
+  id: string;
+  url: string;
+  title: string;
+  messageId: string;
+  conversationId: string;
+  content: string;
+  createdAt: string;
+  sender?: {
+    id: string;
+    username: string;
+    avatar?: string | null;
+  };
+};
+
+export type LinksResponse = {
+  links: LinkPreview[];
+  hasMore: boolean;
+};
+
 export type MessageSearchResponse = {
   messages: Message[];
 };

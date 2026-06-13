@@ -1423,13 +1423,15 @@ button.member-row:hover,
   object-fit: cover;
 }
 
-.file-list {
+.file-list,
+.link-list {
   display: flex;
   flex-direction: column;
   gap: 6px;
 }
 
-.shared-file-row {
+.shared-file-row,
+.shared-link-row {
   display: grid;
   grid-template-columns: 28px minmax(0, 1fr);
   align-items: center;
@@ -1443,31 +1445,43 @@ button.member-row:hover,
   text-decoration: none;
 }
 
-.shared-file-row:hover {
+.shared-file-row:hover,
+.shared-link-row:hover {
   border-color: rgba(15, 118, 110, 0.32);
   background: rgba(15, 118, 110, 0.08);
 }
 
-.shared-file-row span {
+.shared-file-row span,
+.shared-link-row span {
   min-width: 0;
 }
 
 .shared-file-row strong,
-.shared-file-row small {
+.shared-file-row small,
+.shared-link-row strong,
+.shared-link-row small,
+.shared-link-row em {
   display: block;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.shared-file-row strong {
+.shared-file-row strong,
+.shared-link-row strong {
   font-size: 12px;
   font-weight: 650;
 }
 
-.shared-file-row small {
+.shared-file-row small,
+.shared-link-row small,
+.shared-link-row em {
   color: var(--muted);
   font-size: 11px;
+}
+
+.shared-link-row em {
+  font-style: normal;
 }
 
 .invite-list {

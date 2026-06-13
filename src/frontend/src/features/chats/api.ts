@@ -6,6 +6,7 @@ import type {
   GroupMember,
   InviteLink,
   InvitePreview,
+  LinksResponse,
   Message,
   MessageSearchResponse,
   MessagesResponse,
@@ -84,6 +85,16 @@ export async function getConversationAttachments(
   options: { kind?: string; limit?: number; beforeCreatedAt?: string; beforeId?: string } = {},
 ) {
   const { data } = await apiClient.get<AttachmentsResponse>(`/messages/${conversationId}/attachments`, {
+    params: options,
+  });
+  return data;
+}
+
+export async function getConversationLinks(
+  conversationId: string,
+  options: { limit?: number; beforeCreatedAt?: string; beforeId?: string } = {},
+) {
+  const { data } = await apiClient.get<LinksResponse>(`/messages/${conversationId}/links`, {
     params: options,
   });
   return data;

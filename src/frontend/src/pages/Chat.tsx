@@ -13,6 +13,7 @@ import {
   forwardMessage,
   getConversations,
   getConversationAttachments,
+  getConversationLinks,
   getGroupInviteLinks,
   getGroupMembers,
   getMessages,
@@ -37,7 +38,7 @@ import { MessageComposer } from '../features/chats/components/MessageComposer';
 import { MessageList } from '../features/chats/components/MessageList';
 import { connectChatSocket, joinConversation, startTyping, stopTyping } from '../features/chats/socket';
 import type { ChatSocket } from '../features/chats/socket';
-import type { Attachment, Conversation, GroupMember, InviteLink, Message, PinnedMessage } from '../features/chats/types';
+import type { Attachment, Conversation, GroupMember, InviteLink, LinkPreview, Message, PinnedMessage } from '../features/chats/types';
 import { CreateGroupModal } from '../features/groups/components/CreateGroupModal';
 import { ProfileModal } from '../features/users/components/ProfileModal';
 import { getCurrentUser, searchUsers, updateCurrentUser } from '../features/users/api';
@@ -164,6 +165,7 @@ export function ChatPage() {
   const [detailsNotice, setDetailsNotice] = useState('');
   const [mediaAttachments, setMediaAttachments] = useState<Attachment[]>([]);
   const [fileAttachments, setFileAttachments] = useState<Attachment[]>([]);
+  const [linkPreviews, setLinkPreviews] = useState<LinkPreview[]>([]);
   const [attachmentsLoading, setAttachmentsLoading] = useState(false);
   const [memberSearch, setMemberSearch] = useState('');
   const [memberSearchResults, setMemberSearchResults] = useState<SearchUser[]>([]);
@@ -919,6 +921,7 @@ export function ChatPage() {
     setMembers([]);
     setMediaAttachments([]);
     setFileAttachments([]);
+    setLinkPreviews([]);
     setGroupNameDraft(activeConversation.name);
     setAnnouncementDraft(activeConversation.announcement || '');
     setMemberSearch('');
@@ -926,11 +929,15 @@ export function ChatPage() {
 
     setAttachmentsLoading(true);
     try {
-      const data = await getConversationAttachments(activeConversation.id, { limit: 80 });
-      setMediaAttachments(data.attachments.filter(attachment => attachment.kind !== 'file'));
-      setFileAttachments(data.attachments.filter(attachment => attachment.kind === 'file'));
+      const [attachmentsData, linksData] = await Promise.all([
+        getConversationAttachments(activeConversation.id, { limit: 80 }),
+        getConversationLinks(activeConversation.id, { limit: 40 }),
+      ]);
+      setMediaAttachments(attachmentsData.attachments.filter(attachment => attachment.kind !== 'file'));
+      setFileAttachments(attachmentsData.attachments.filter(attachment => attachment.kind === 'file'));
+      setLinkPreviews(linksData.links);
     } catch (error: any) {
-      setDetailsError(error.response?.data?.message || 'Could not load shared files');
+      setDetailsError(error.response?.data?.message || 'Could not load shared content');
     } finally {
       setAttachmentsLoading(false);
     }
@@ -1245,6 +1252,7 @@ export function ChatPage() {
         inviteLoading={inviteLoading}
         mediaAttachments={mediaAttachments}
         fileAttachments={fileAttachments}
+        linkPreviews={linkPreviews}
         attachmentsLoading={attachmentsLoading}
         loading={membersLoading}
         error={detailsError}

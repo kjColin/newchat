@@ -116,6 +116,23 @@ export class ListAttachmentsQueryDto {
   beforeId?: string;
 }
 
+export class ListLinksQueryDto {
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(100)
+  limit?: number;
+
+  @IsOptional()
+  @IsISO8601()
+  beforeCreatedAt?: string;
+
+  @IsOptional()
+  @IsString()
+  beforeId?: string;
+}
+
 export class ForwardMessageDto {
   @IsString()
   @IsNotEmpty()
