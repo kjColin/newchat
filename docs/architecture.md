@@ -518,7 +518,7 @@ Data
 - 生产环境已强制校验 `JWT_SECRET` 和 `CORS_ORIGINS`；部署时必须提供真实密钥和前端域名。
 - 自动化测试已覆盖核心 REST 流程、Socket 实时事件、多设备在线状态和 Web Push 注册降级；真实浏览器 Push 投递仍需要端到端环境验证。
 - 站内通知已持久化并支持保留策略；Web Push 已具备可配置投递路径，生产需要配置 VAPID key 并验证浏览器/平台兼容性。
-- `Chat.tsx` 已抽出通知状态、Socket 编排、消息状态、会话列表、详情侧栏、用户搜索和创建会话表单 hook，并已为创建会话 hook 补上单元测试；后续风险主要在其他 hook/组件测试缺口和工程边界清理。
+- `Chat.tsx` 已抽出通知状态、Socket 编排、消息状态、会话列表、详情侧栏、用户搜索和创建会话表单 hook，并已为用户搜索和创建会话 hook 补上单元测试；后续风险主要在其他 hook/组件测试缺口和工程边界清理。
 
 ## 15. 近期落地建议
 
@@ -526,7 +526,7 @@ Data
 
 1. 清理工程边界，统一 `newchat` 与 `chat-app` 的部署目录关系。
 2. 在真实浏览器环境验证 Web Push 投递、权限拒绝和 subscription 失效清理。
-3. 在已建立的 Vitest + Testing Library 基线上，继续为通知、Socket、消息、会话、详情、用户搜索等 hook 补测试。
+3. 在已建立的 Vitest + Testing Library 基线上，继续为通知、Socket、消息、会话、详情等 hook 补测试。
 4. 规划 Redis adapter、对象存储和消息队列接入。
 5. 将 `Chat.tsx` 拆分后的 hooks 接入组件测试。
 
