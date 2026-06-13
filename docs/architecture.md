@@ -510,6 +510,7 @@ Data
 - 联系人资料页：历史链接按联系人/本人筛选，链接预览包含 hostname 元数据。
 - Bot API 简化版。
 - Redis adapter、消息队列、对象存储。
+- Android APK：基于 Capacitor 封装现有 React/Vite 前端，使用线上 API/Socket 地址，第一版保留前台 Socket 与站内通知；原生 Push 后续接 FCM。
 
 ## 14. 当前风险
 
@@ -519,6 +520,7 @@ Data
 - 自动化测试已覆盖核心 REST 流程、Socket 实时事件、多设备在线状态和 Web Push 注册降级；真实浏览器 Push 投递仍需要端到端环境验证。
 - 站内通知已持久化并支持保留策略；Web Push 已具备可配置投递路径，生产需要配置 VAPID key 并验证浏览器/平台兼容性。
 - `Chat.tsx` 已抽出通知状态、Socket 编排、消息状态、会话列表、详情侧栏、用户搜索和创建会话表单 hook，并已为通知、Socket、会话、消息、详情、用户搜索和创建会话 hook 补上单元测试；创建群/频道弹窗、消息列表、编辑器、会话列表和详情面板已补组件交互测试，`ChatPage` 编排层已覆盖未登录重定向、会话选择、消息操作、侧栏发现/关系、详情、通知和资料更新路径。后续风险主要在真实浏览器 Push 验证和工程边界清理。
+- Android APK 构建链路已接入 Capacitor；仍需在 Android SDK 环境中产出 debug APK，并在真机验证登录、Socket、附件上传和通知体验。
 
 ## 15. 近期落地建议
 
@@ -526,8 +528,8 @@ Data
 
 1. 继续清理工程边界，将 `newchat` 与 `chat-app` 的命名和部署目录关系从文档约束推进到目录/服务统一。
 2. 在真实浏览器环境验证 Web Push 投递、权限拒绝和 subscription 失效清理。
-3. 在已建立的 Vitest + Testing Library 基线上，继续补真实浏览器级别的端到端验证，覆盖登录后主聊天流、Web Push 权限和订阅失效路径。
+3. 构建 Android debug APK，并在真机验证登录、Socket 实时消息、文件上传和前后台通知体验。
 4. 规划 Redis adapter、对象存储和消息队列接入。
-5. 将 `Chat.tsx` 拆分后的 hooks 接入组件测试。
+5. 在已建立的 Vitest + Testing Library 基线上，继续补真实浏览器级别的端到端验证，覆盖登录后主聊天流、Web Push 权限和订阅失效路径。
 
 这条路线能在不推翻现有 NestJS + React 架构的前提下，把当前应用从基础聊天应用平滑演进为更接近 Telegram 的实时通信产品。

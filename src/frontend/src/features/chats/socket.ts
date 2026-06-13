@@ -22,8 +22,10 @@ type ClientEvents = {
 
 export type ChatSocket = Socket<ServerEvents, ClientEvents>;
 
+const socketUrl = import.meta.env.VITE_SOCKET_URL || '/';
+
 export function connectChatSocket(token: string) {
-  return io('/', {
+  return io(socketUrl, {
     auth: { token },
     transports: ['websocket', 'polling'],
   }) as ChatSocket;
