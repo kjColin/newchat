@@ -10,6 +10,8 @@ export class ConversationsService {
       throw new ForbiddenException('Cannot create a direct conversation with yourself');
     }
 
+    await this.ensureNotBlocked(userId, targetUserId);
+
     const existing = await this.prisma.conversation.findMany({
       where: {
         type: 'direct',
@@ -76,7 +78,14 @@ export class ConversationsService {
       };
 
       if (conversation.type === 'direct') {
-        return this.formatDirectConversation(conversation, userId, settings);
+        return this.formatDirectConversation(
+          conversation,
+          userId,
+          {
+            ...settings,
+            relationships: await this.directRelationships(userId, conversation),
+          },
+        );
       }
 
       return this.formatGroupConversation(
@@ -155,13 +164,43 @@ export class ConversationsService {
       avatar: other?.avatar || null,
       memberCount: conversation.participants.length,
       lastMessage: conversation.messages?.[0] || null,
-      user: other || null,
+      user: other ? {
+        ...other,
+        isContact: Boolean(settings.relationships?.isContact),
+        isBlocked: Boolean(settings.relationships?.isBlocked),
+      } : null,
       unreadCount: settings.unreadCount || 0,
       lastReadAt: settings.lastReadAt,
       pinnedAt: settings.pinnedAt,
       mutedUntil: settings.mutedUntil,
       archivedAt: settings.archivedAt,
       lastActivityAt: settings.lastActivityAt || conversation.updatedAt,
+    };
+  }
+
+  private async directRelationships(currentUserId: string, conversation: any) {
+    const otherId = conversation.participants.find(participant => participant.userId !== currentUserId)?.userId;
+    if (!otherId) return { isContact: false, isBlocked: false };
+
+    const [contact, block] = await Promise.all([
+      this.prisma.contact.findUnique({
+        where: { ownerId_userId: { ownerId: currentUserId, userId: otherId } },
+        select: { userId: true },
+      }),
+      this.prisma.blockList.findFirst({
+        where: {
+          OR: [
+            { blockerId: currentUserId, blockedId: otherId },
+            { blockerId: otherId, blockedId: currentUserId },
+          ],
+        },
+        select: { blockerId: true },
+      }),
+    ]);
+
+    return {
+      isContact: Boolean(contact),
+      isBlocked: Boolean(block),
     };
   }
 
@@ -184,5 +223,20 @@ export class ConversationsService {
       },
       messages: { take: 1, orderBy: { createdAt: 'desc' as const } },
     };
+  }
+
+  private async ensureNotBlocked(userId: string, targetUserId: string) {
+    const block = await this.prisma.blockList.findFirst({
+      where: {
+        OR: [
+          { blockerId: userId, blockedId: targetUserId },
+          { blockerId: targetUserId, blockedId: userId },
+        ],
+      },
+    });
+
+    if (block) {
+      throw new ForbiddenException('Direct conversation is not available');
+    }
   }
 }

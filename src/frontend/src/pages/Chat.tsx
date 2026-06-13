@@ -208,6 +208,7 @@ export function ChatPage() {
     () => notifications.filter(notification => !notification.read).length,
     [notifications],
   );
+  const activeDirectBlocked = Boolean(activeConversation?.type === 'direct' && activeConversation.user?.isBlocked);
   const syncSearchUser = useCallback((userId: string, updates: Partial<SearchUser>) => {
     setSearchResults(prev => prev.map(user => user.id === userId ? { ...user, ...updates } : user));
     setGroupSearchResults(prev => prev.map(user => user.id === userId ? { ...user, ...updates } : user));
@@ -842,6 +843,16 @@ export function ChatPage() {
       setBlockedUsers(nextBlocked);
       setContacts(nextContacts);
       syncSearchUser(user.id, { isContact: false, isBlocked: true });
+      setConversations(prev => prev.map(conversation =>
+        conversation.user?.id === user.id
+          ? { ...conversation, user: { ...conversation.user, isContact: false, isBlocked: true } }
+          : conversation
+      ));
+      setActiveConversation(prev =>
+        prev?.user?.id === user.id
+          ? { ...prev, user: { ...prev.user, isContact: false, isBlocked: true } }
+          : prev
+      );
     } catch (error: any) {
       setSidebarError(error.response?.data?.message || 'Could not block user');
     }
@@ -853,6 +864,16 @@ export function ChatPage() {
       const nextBlocked = await unblockUser(user.id);
       setBlockedUsers(nextBlocked);
       syncSearchUser(user.id, { isBlocked: false });
+      setConversations(prev => prev.map(conversation =>
+        conversation.user?.id === user.id
+          ? { ...conversation, user: { ...conversation.user, isBlocked: false } }
+          : conversation
+      ));
+      setActiveConversation(prev =>
+        prev?.user?.id === user.id
+          ? { ...prev, user: { ...prev.user, isBlocked: false } }
+          : prev
+      );
     } catch (error: any) {
       setSidebarError(error.response?.data?.message || 'Could not unblock user');
     }
@@ -1273,9 +1294,12 @@ export function ChatPage() {
                 {(activeConversation.unreadCount || 0) > 0 && <span>{activeConversation.unreadCount}</span>}
               </button>
             )}
+            {activeDirectBlocked && (
+              <div className="state-banner error flush">Messaging is disabled for this conversation.</div>
+            )}
             <MessageComposer
               value={draft}
-              disabled={loadingMessages}
+              disabled={loadingMessages || activeDirectBlocked}
               sending={sending}
               editing={Boolean(editingMessage)}
               replyTo={replyToMessage}

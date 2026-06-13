@@ -19,6 +19,7 @@ export class MessagesService {
 
     // 验证用户是该会话参与者
     await this.ensureParticipant(conversationId, senderId);
+    await this.ensureCanSend(conversationId, senderId);
 
     if (data.clientId) {
       const existing = await this.prisma.message.findUnique({
@@ -471,6 +472,33 @@ export class MessagesService {
 
     if (!participant) throw new ForbiddenException('Not in conversation');
     return participant;
+  }
+
+  private async ensureCanSend(conversationId: string, userId: string) {
+    const conversation = await this.prisma.conversation.findUnique({
+      where: { id: conversationId },
+      include: {
+        participants: { select: { userId: true } },
+      },
+    });
+
+    if (!conversation || conversation.type !== 'direct') return;
+
+    const targetUserId = conversation.participants.find(participant => participant.userId !== userId)?.userId;
+    if (!targetUserId) return;
+
+    const block = await this.prisma.blockList.findFirst({
+      where: {
+        OR: [
+          { blockerId: userId, blockedId: targetUserId },
+          { blockerId: targetUserId, blockedId: userId },
+        ],
+      },
+    });
+
+    if (block) {
+      throw new ForbiddenException('Cannot send messages in this conversation');
+    }
   }
 
   private async ensureCanManagePins(conversationId: string, userId: string) {
