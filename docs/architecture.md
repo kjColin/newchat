@@ -207,6 +207,8 @@ PostgreSQL
 | `GroupMember` | 群成员和角色 |
 | `Attachment` | 文件/图片等附件元数据 |
 | `InviteLink` | 群邀请链接、撤销状态、使用次数 |
+| `Contact` | 用户联系人关系和别名 |
+| `BlockList` | 用户拉黑关系 |
 
 ### 7.2 建议新增模型
 
@@ -217,23 +219,6 @@ model MessageReadReceipt {
   readAt    DateTime @default(now())
 
   @@id([messageId, userId])
-}
-
-model Contact {
-  ownerId   String
-  userId    String
-  alias     String?
-  createdAt DateTime @default(now())
-
-  @@id([ownerId, userId])
-}
-
-model BlockList {
-  blockerId String
-  blockedId String
-  createdAt DateTime @default(now())
-
-  @@id([blockerId, blockedId])
 }
 ```
 
@@ -257,6 +242,12 @@ REST API 负责可重放、可校验的命令和查询。
 | `GET` | `/api/users/me` | 当前用户 |
 | `PATCH` | `/api/users/me` | 更新用户名和头像 |
 | `GET` | `/api/users/search?q=` | 搜索用户 |
+| `GET` | `/api/users/contacts` | 联系人列表 |
+| `POST` | `/api/users/contacts` | 添加联系人 |
+| `DELETE` | `/api/users/contacts/:userId` | 移除联系人 |
+| `GET` | `/api/users/blocks` | 拉黑列表 |
+| `POST` | `/api/users/blocks` | 拉黑用户 |
+| `DELETE` | `/api/users/blocks/:userId` | 取消拉黑 |
 | `GET` | `/api/conversations` | 会话列表 |
 | `POST` | `/api/conversations/direct` | 创建/获取单聊 |
 | `PATCH` | `/api/conversations/:id/settings` | 置顶、免打扰、归档 |
@@ -461,7 +452,7 @@ Data
 
 - 频道 Channel。
 - 公开群和群目录。
-- 联系人、拉黑、隐私设置。
+- 隐私设置。
 - 联系人资料页中的历史链接筛选和链接预览元数据增强。
 - Bot API 简化版。
 - Redis adapter、消息队列、对象存储。
@@ -483,6 +474,6 @@ Data
 2. 补充基础 e2e 测试：注册、登录、单聊、群聊、文件消息、邀请入群。
 3. 将 `Chat.tsx` 拆为会话、消息、详情、Socket 等 hooks。
 4. 落地站内通知和浏览器通知。
-5. 补全联系人、拉黑、隐私设置和链接列表等扩展能力。
+5. 补全隐私设置、联系人资料页、公开群目录等扩展能力。
 
 这条路线能在不推翻现有 NestJS + React 架构的前提下，把当前应用从基础聊天应用平滑演进为更接近 Telegram 的实时通信产品。

@@ -96,6 +96,60 @@
 }
 ```
 
+### GET /api/users/search
+搜索用户，并返回当前用户与搜索结果的联系人/拉黑关系。
+
+**Query**: `?q=<keyword>`
+
+**Response** (200)
+```json
+[
+  {
+    "id": "uuid",
+    "username": "string",
+    "email": "string",
+    "avatar": null,
+    "status": "online",
+    "lastSeen": "timestamp",
+    "isContact": true,
+    "isBlocked": false
+  }
+]
+```
+
+### GET /api/users/contacts
+获取当前用户联系人列表。
+
+### POST /api/users/contacts
+添加联系人；不能添加自己或已拉黑用户。
+
+**Request**
+```json
+{
+  "userId": "uuid",
+  "alias": "optional alias"
+}
+```
+
+### DELETE /api/users/contacts/:userId
+移除联系人。
+
+### GET /api/users/blocks
+获取当前用户拉黑列表。
+
+### POST /api/users/blocks
+拉黑用户；拉黑时会移除双方已有联系人关系。
+
+**Request**
+```json
+{
+  "userId": "uuid"
+}
+```
+
+### DELETE /api/users/blocks/:userId
+取消拉黑用户。
+
 ---
 
 ## 会话 API

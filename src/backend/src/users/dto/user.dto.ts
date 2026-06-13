@@ -19,3 +19,18 @@ export class UpdateCurrentUserDto {
   @MaxLength(500)
   avatar?: string;
 }
+
+export class ContactUserDto {
+  @IsString()
+  userId: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(32)
+  alias?: string;
+}
+
+export class BlockUserDto {
+  @IsString()
+  userId: string;
+}

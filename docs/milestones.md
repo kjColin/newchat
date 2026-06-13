@@ -58,6 +58,7 @@
 | 用户头像/资料编辑 | fullstack | ✅ |
 | 搜索功能 | backend | ✅ |
 | 站内通知/浏览器通知 | frontend | ✅ |
+| 联系人/拉黑 | fullstack | ✅ |
 | 性能优化 | all | ⏳ |
 
 **交付物**:

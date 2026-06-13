@@ -402,7 +402,8 @@
 }
 
 .conversation-badges,
-.row-actions {
+.row-actions,
+.user-actions {
   display: inline-flex;
   align-items: center;
   justify-content: flex-end;
@@ -435,6 +436,11 @@
 .mini-icon-button:hover {
   color: var(--text);
   background: #e6ebf0;
+}
+
+.mini-icon-button.danger:hover {
+  color: var(--danger);
+  background: rgba(180, 35, 24, 0.08);
 }
 
 .mini-icon-button:disabled {

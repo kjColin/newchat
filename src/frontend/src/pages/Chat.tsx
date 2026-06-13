@@ -41,8 +41,18 @@ import type { ChatSocket } from '../features/chats/socket';
 import type { Attachment, Conversation, GroupMember, InviteLink, LinkPreview, Message, PinnedMessage } from '../features/chats/types';
 import { CreateGroupModal } from '../features/groups/components/CreateGroupModal';
 import { ProfileModal } from '../features/users/components/ProfileModal';
-import { getCurrentUser, searchUsers, updateCurrentUser } from '../features/users/api';
-import type { SearchUser } from '../features/users/types';
+import {
+  addContact,
+  blockUser,
+  getBlockedUsers,
+  getContacts,
+  getCurrentUser,
+  removeContact,
+  searchUsers,
+  unblockUser,
+  updateCurrentUser,
+} from '../features/users/api';
+import type { BlockedUserEntry, ContactEntry, SearchUser } from '../features/users/types';
 import { getBrowserNotificationState, requestBrowserNotificationPermission, showBrowserNotification } from '../features/notifications/browser-notifications';
 import { NotificationMenu } from '../features/notifications/components/NotificationMenu';
 import type { BrowserNotificationState, NotificationItem } from '../features/notifications/types';
@@ -149,6 +159,8 @@ export function ChatPage() {
   const [searchingMessages, setSearchingMessages] = useState(false);
   const [search, setSearch] = useState('');
   const [searchResults, setSearchResults] = useState<SearchUser[]>([]);
+  const [contacts, setContacts] = useState<ContactEntry[]>([]);
+  const [blockedUsers, setBlockedUsers] = useState<BlockedUserEntry[]>([]);
   const [mobileConversationOpen, setMobileConversationOpen] = useState(false);
   const [createGroupOpen, setCreateGroupOpen] = useState(false);
   const [groupName, setGroupName] = useState('');
@@ -196,6 +208,11 @@ export function ChatPage() {
     () => notifications.filter(notification => !notification.read).length,
     [notifications],
   );
+  const syncSearchUser = useCallback((userId: string, updates: Partial<SearchUser>) => {
+    setSearchResults(prev => prev.map(user => user.id === userId ? { ...user, ...updates } : user));
+    setGroupSearchResults(prev => prev.map(user => user.id === userId ? { ...user, ...updates } : user));
+    setMemberSearchResults(prev => prev.map(user => user.id === userId ? { ...user, ...updates } : user));
+  }, []);
 
   const selectConversation = useCallback(async (conversation: Conversation) => {
     setActiveConversation(conversation);
@@ -459,6 +476,24 @@ export function ChatPage() {
     }
 
     load();
+  }, []);
+
+  useEffect(() => {
+    async function loadRelationships() {
+      try {
+        const [nextContacts, nextBlocked] = await Promise.all([
+          getContacts(),
+          getBlockedUsers(),
+        ]);
+        setContacts(nextContacts);
+        setBlockedUsers(nextBlocked);
+      } catch {
+        setContacts([]);
+        setBlockedUsers([]);
+      }
+    }
+
+    loadRelationships();
   }, []);
 
   useEffect(() => {
@@ -762,6 +797,7 @@ export function ChatPage() {
   };
 
   const handleStartDirect = async (user: SearchUser) => {
+    if (user.isBlocked) return;
     setSidebarError('');
     try {
       const conversation = await createDirectConversation(user.id);
@@ -771,6 +807,54 @@ export function ChatPage() {
       await selectConversation(conversation);
     } catch (error: any) {
       setSidebarError(error.response?.data?.message || 'Could not start chat');
+    }
+  };
+
+  const handleAddContact = async (user: SearchUser) => {
+    setSidebarError('');
+    try {
+      const nextContacts = await addContact(user.id);
+      setContacts(nextContacts);
+      syncSearchUser(user.id, { isContact: true, isBlocked: false });
+    } catch (error: any) {
+      setSidebarError(error.response?.data?.message || 'Could not add contact');
+    }
+  };
+
+  const handleRemoveContact = async (user: SearchUser) => {
+    setSidebarError('');
+    try {
+      const nextContacts = await removeContact(user.id);
+      setContacts(nextContacts);
+      syncSearchUser(user.id, { isContact: false });
+    } catch (error: any) {
+      setSidebarError(error.response?.data?.message || 'Could not remove contact');
+    }
+  };
+
+  const handleBlockUser = async (user: SearchUser) => {
+    setSidebarError('');
+    try {
+      const [nextBlocked, nextContacts] = await Promise.all([
+        blockUser(user.id),
+        getContacts(),
+      ]);
+      setBlockedUsers(nextBlocked);
+      setContacts(nextContacts);
+      syncSearchUser(user.id, { isContact: false, isBlocked: true });
+    } catch (error: any) {
+      setSidebarError(error.response?.data?.message || 'Could not block user');
+    }
+  };
+
+  const handleUnblockUser = async (user: SearchUser) => {
+    setSidebarError('');
+    try {
+      const nextBlocked = await unblockUser(user.id);
+      setBlockedUsers(nextBlocked);
+      syncSearchUser(user.id, { isBlocked: false });
+    } catch (error: any) {
+      setSidebarError(error.response?.data?.message || 'Could not unblock user');
     }
   };
 
@@ -1069,6 +1153,8 @@ export function ChatPage() {
         activeConversationId={activeConversation?.id}
         search={search}
         users={searchResults}
+        contacts={contacts}
+        blockedUsers={blockedUsers}
         loading={loadingConversations}
         error={sidebarError}
         inviteInput={inviteInput}
@@ -1091,6 +1177,10 @@ export function ChatPage() {
         onJoinInvite={() => joinInviteCode(inviteInput)}
         onSelectConversation={selectConversation}
         onStartDirect={handleStartDirect}
+        onAddContact={handleAddContact}
+        onRemoveContact={handleRemoveContact}
+        onBlockUser={handleBlockUser}
+        onUnblockUser={handleUnblockUser}
         onOpenCreateGroup={() => setCreateGroupOpen(true)}
         onOpenProfile={openProfile}
         onLogout={logout}

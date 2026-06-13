@@ -1,9 +1,9 @@
-import { Archive, BellOff, Link2, LogOut, MessageCircle, Pin, PinOff, Plus, Search, Settings, Users } from 'lucide-react';
+import { Archive, BellOff, Link2, LogOut, MessageCircle, Pin, PinOff, Plus, Search, Settings, ShieldOff, UserCheck, UserMinus, Users } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { Avatar } from '../../../shared/components/Avatar';
 import { formatConversationTime } from '../../../shared/utils/time';
 import type { User } from '../../auth/types';
-import type { SearchUser } from '../../users/types';
+import type { BlockedUserEntry, ContactEntry, SearchUser } from '../../users/types';
 import type { Conversation } from '../types';
 
 type ConversationListProps = {
@@ -13,6 +13,8 @@ type ConversationListProps = {
   activeConversationId?: string;
   search: string;
   users: SearchUser[];
+  contacts: ContactEntry[];
+  blockedUsers: BlockedUserEntry[];
   loading: boolean;
   error: string;
   inviteInput: string;
@@ -22,6 +24,10 @@ type ConversationListProps = {
   onJoinInvite: () => void;
   onSelectConversation: (conversation: Conversation) => void;
   onStartDirect: (user: SearchUser) => void;
+  onAddContact: (user: SearchUser) => void;
+  onRemoveContact: (user: SearchUser) => void;
+  onBlockUser: (user: SearchUser) => void;
+  onUnblockUser: (user: SearchUser) => void;
   onOpenCreateGroup: () => void;
   onOpenProfile: () => void;
   onLogout: () => void;
@@ -37,6 +43,8 @@ export function ConversationList({
   activeConversationId,
   search,
   users,
+  contacts,
+  blockedUsers,
   loading,
   error,
   inviteInput,
@@ -46,6 +54,10 @@ export function ConversationList({
   onJoinInvite,
   onSelectConversation,
   onStartDirect,
+  onAddContact,
+  onRemoveContact,
+  onBlockUser,
+  onUnblockUser,
   onOpenCreateGroup,
   onOpenProfile,
   onLogout,
@@ -126,20 +138,88 @@ export function ConversationList({
           <section className="search-results">
             <div className="section-label">People</div>
             {users.map(user => (
-              <button className="conversation-row" key={user.id} type="button" onClick={() => onStartDirect(user)}>
+              <div className="conversation-row" key={user.id}>
                 <Avatar name={user.username} src={user.avatar} status={user.status} />
                 <span className="conversation-main">
                   <strong>{user.username}</strong>
-                  <small>{user.email}</small>
+                  <small>{user.isBlocked ? 'Blocked' : user.isContact ? 'Contact' : user.email}</small>
                 </span>
-                <MessageCircle size={17} />
-              </button>
+                <span className="user-actions">
+                  <button className="mini-icon-button" type="button" onClick={() => onStartDirect(user)} disabled={user.isBlocked} title="Message">
+                    <MessageCircle size={14} />
+                  </button>
+                  {user.isContact ? (
+                    <button className="mini-icon-button" type="button" onClick={() => onRemoveContact(user)} title="Remove contact">
+                      <UserMinus size={14} />
+                    </button>
+                  ) : (
+                    <button className="mini-icon-button" type="button" onClick={() => onAddContact(user)} disabled={user.isBlocked} title="Add contact">
+                      <UserCheck size={14} />
+                    </button>
+                  )}
+                  {user.isBlocked ? (
+                    <button className="mini-icon-button" type="button" onClick={() => onUnblockUser(user)} title="Unblock">
+                      <ShieldOff size={14} />
+                    </button>
+                  ) : (
+                    <button className="mini-icon-button danger" type="button" onClick={() => onBlockUser(user)} title="Block">
+                      <ShieldOff size={14} />
+                    </button>
+                  )}
+                </span>
+              </div>
+            ))}
+          </section>
+        )}
+
+        {!query && contacts.length > 0 && (
+          <section className="search-results">
+            <div className="section-label">Contacts</div>
+            {contacts.map(contact => (
+              <div className="conversation-row" key={contact.user.id}>
+                <Avatar name={contact.user.username} src={contact.user.avatar} status={contact.user.status} />
+                <span className="conversation-main">
+                  <strong>{contact.alias || contact.user.username}</strong>
+                  <small>{contact.user.email}</small>
+                </span>
+                <span className="user-actions">
+                  <button className="mini-icon-button" type="button" onClick={() => onStartDirect(contact.user)} title="Message">
+                    <MessageCircle size={14} />
+                  </button>
+                  <button className="mini-icon-button" type="button" onClick={() => onRemoveContact(contact.user)} title="Remove contact">
+                    <UserMinus size={14} />
+                  </button>
+                  <button className="mini-icon-button danger" type="button" onClick={() => onBlockUser(contact.user)} title="Block">
+                    <ShieldOff size={14} />
+                  </button>
+                </span>
+              </div>
+            ))}
+          </section>
+        )}
+
+        {!query && blockedUsers.length > 0 && (
+          <section className="search-results">
+            <div className="section-label">Blocked</div>
+            {blockedUsers.map(block => (
+              <div className="conversation-row" key={block.user.id}>
+                <Avatar name={block.user.username} src={block.user.avatar} status={block.user.status} />
+                <span className="conversation-main">
+                  <strong>{block.user.username}</strong>
+                  <small>{block.user.email}</small>
+                </span>
+                <span className="user-actions">
+                  <button className="mini-icon-button" type="button" onClick={() => onUnblockUser(block.user)} title="Unblock">
+                    <ShieldOff size={14} />
+                  </button>
+                </span>
+              </div>
             ))}
           </section>
         )}
 
         <section>
-          {users.length > 0 && <div className="section-label">Chats</div>}
+          {(users.length > 0 || contacts.length > 0 || blockedUsers.length > 0) && <div className="section-label">Chats</div>}
           {!loading && filteredConversations.length === 0 ? (
             <div className="empty-list">
               <Users size={28} />
