@@ -9,6 +9,7 @@ import {
   createGroup,
   createGroupInviteLink,
   deleteMessage,
+  discoverChannels,
   editMessage,
   addGroupMembers,
   forwardMessage,
@@ -27,7 +28,9 @@ import {
   revokeGroupInviteLink,
   searchMessages,
   sendMessage,
+  subscribeChannel,
   toggleReaction,
+  unsubscribeChannel,
   updateConversationSettings,
   updateGroup,
   unpinMessage,
@@ -40,7 +43,7 @@ import { MessageComposer } from '../features/chats/components/MessageComposer';
 import { MessageList } from '../features/chats/components/MessageList';
 import { connectChatSocket, joinConversation, startTyping, stopTyping } from '../features/chats/socket';
 import type { ChatSocket } from '../features/chats/socket';
-import type { Attachment, Conversation, GroupMember, InviteLink, LinkPreview, Message, PinnedMessage } from '../features/chats/types';
+import type { Attachment, ChannelDiscoveryItem, Conversation, GroupMember, InviteLink, LinkPreview, Message, PinnedMessage } from '../features/chats/types';
 import { CreateChannelModal } from '../features/channels/components/CreateChannelModal';
 import { CreateGroupModal } from '../features/groups/components/CreateGroupModal';
 import { ProfileModal } from '../features/users/components/ProfileModal';
@@ -162,6 +165,8 @@ export function ChatPage() {
   const [searchingMessages, setSearchingMessages] = useState(false);
   const [search, setSearch] = useState('');
   const [searchResults, setSearchResults] = useState<SearchUser[]>([]);
+  const [channelResults, setChannelResults] = useState<ChannelDiscoveryItem[]>([]);
+  const [channelActionLoading, setChannelActionLoading] = useState('');
   const [contacts, setContacts] = useState<ContactEntry[]>([]);
   const [blockedUsers, setBlockedUsers] = useState<BlockedUserEntry[]>([]);
   const [mobileConversationOpen, setMobileConversationOpen] = useState(false);
@@ -520,9 +525,22 @@ export function ChatPage() {
   useEffect(() => {
     const timer = window.setTimeout(async () => {
       try {
-        setSearchResults(await searchUsers(search));
+        const query = search.trim();
+        if (!query) {
+          setSearchResults([]);
+          setChannelResults([]);
+          return;
+        }
+
+        const [nextUsers, nextChannels] = await Promise.all([
+          searchUsers(query),
+          discoverChannels(query),
+        ]);
+        setSearchResults(nextUsers);
+        setChannelResults(nextChannels);
       } catch {
         setSearchResults([]);
+        setChannelResults([]);
       }
     }, 250);
 
@@ -935,6 +953,48 @@ export function ChatPage() {
     }
   };
 
+  const handleSubscribeChannel = async (channel: ChannelDiscoveryItem) => {
+    setChannelActionLoading(channel.conversationId);
+    setSidebarError('');
+    try {
+      const conversation = await subscribeChannel(channel.conversationId);
+      setConversations(prev => sortConversations(upsertConversation(prev, conversation)));
+      setChannelResults(prev => prev.map(item =>
+        item.conversationId === channel.conversationId
+          ? { ...item, isSubscribed: true, role: conversation.role as ChannelDiscoveryItem['role'], memberCount: conversation.memberCount }
+          : item
+      ));
+      await selectConversation(conversation);
+    } catch (error: any) {
+      setSidebarError(error.response?.data?.message || 'Could not subscribe to channel');
+    } finally {
+      setChannelActionLoading('');
+    }
+  };
+
+  const handleUnsubscribeChannel = async (channel: ChannelDiscoveryItem) => {
+    setChannelActionLoading(channel.conversationId);
+    setSidebarError('');
+    try {
+      await unsubscribeChannel(channel.conversationId);
+      setConversations(prev => prev.filter(conversation => conversation.id !== channel.conversationId));
+      setChannelResults(prev => prev.map(item =>
+        item.conversationId === channel.conversationId
+          ? { ...item, isSubscribed: false, role: null, memberCount: Math.max(0, item.memberCount - 1) }
+          : item
+      ));
+      if (activeConversation?.id === channel.conversationId) {
+        setActiveConversation(null);
+        setMessages([]);
+        setMobileConversationOpen(false);
+      }
+    } catch (error: any) {
+      setSidebarError(error.response?.data?.message || 'Could not leave channel');
+    } finally {
+      setChannelActionLoading('');
+    }
+  };
+
   const logout = () => {
     authStore.clear();
     navigate('/login', { replace: true });
@@ -1205,12 +1265,14 @@ export function ChatPage() {
         activeConversationId={activeConversation?.id}
         search={search}
         users={searchResults}
+        channelResults={channelResults}
         contacts={contacts}
         blockedUsers={blockedUsers}
         loading={loadingConversations}
         error={sidebarError}
         inviteInput={inviteInput}
         joiningInvite={joiningInvite}
+        channelActionLoading={channelActionLoading}
         notificationSlot={(
           <NotificationMenu
             open={notificationsOpen}
@@ -1233,6 +1295,8 @@ export function ChatPage() {
         onRemoveContact={handleRemoveContact}
         onBlockUser={handleBlockUser}
         onUnblockUser={handleUnblockUser}
+        onSubscribeChannel={handleSubscribeChannel}
+        onUnsubscribeChannel={handleUnsubscribeChannel}
         onOpenCreateGroup={() => setCreateGroupOpen(true)}
         onOpenCreateChannel={() => setCreateChannelOpen(true)}
         onOpenProfile={openProfile}

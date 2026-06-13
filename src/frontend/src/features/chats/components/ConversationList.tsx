@@ -4,7 +4,7 @@ import { Avatar } from '../../../shared/components/Avatar';
 import { formatConversationTime } from '../../../shared/utils/time';
 import type { User } from '../../auth/types';
 import type { BlockedUserEntry, ContactEntry, SearchUser } from '../../users/types';
-import type { Conversation } from '../types';
+import type { ChannelDiscoveryItem, Conversation } from '../types';
 
 type ConversationListProps = {
   currentUser: User;
@@ -13,12 +13,14 @@ type ConversationListProps = {
   activeConversationId?: string;
   search: string;
   users: SearchUser[];
+  channelResults: ChannelDiscoveryItem[];
   contacts: ContactEntry[];
   blockedUsers: BlockedUserEntry[];
   loading: boolean;
   error: string;
   inviteInput: string;
   joiningInvite: boolean;
+  channelActionLoading: string;
   onSearchChange: (value: string) => void;
   onInviteInputChange: (value: string) => void;
   onJoinInvite: () => void;
@@ -28,6 +30,8 @@ type ConversationListProps = {
   onRemoveContact: (user: SearchUser) => void;
   onBlockUser: (user: SearchUser) => void;
   onUnblockUser: (user: SearchUser) => void;
+  onSubscribeChannel: (channel: ChannelDiscoveryItem) => void;
+  onUnsubscribeChannel: (channel: ChannelDiscoveryItem) => void;
   onOpenCreateGroup: () => void;
   onOpenCreateChannel: () => void;
   onOpenProfile: () => void;
@@ -44,12 +48,14 @@ export function ConversationList({
   activeConversationId,
   search,
   users,
+  channelResults,
   contacts,
   blockedUsers,
   loading,
   error,
   inviteInput,
   joiningInvite,
+  channelActionLoading,
   onSearchChange,
   onInviteInputChange,
   onJoinInvite,
@@ -59,6 +65,8 @@ export function ConversationList({
   onRemoveContact,
   onBlockUser,
   onUnblockUser,
+  onSubscribeChannel,
+  onUnsubscribeChannel,
   onOpenCreateGroup,
   onOpenCreateChannel,
   onOpenProfile,
@@ -177,6 +185,44 @@ export function ConversationList({
           </section>
         )}
 
+        {channelResults.length > 0 && (
+          <section className="search-results">
+            <div className="section-label">Channels</div>
+            {channelResults.map(channel => (
+              <div className="conversation-row" key={channel.id}>
+                <Avatar name={channel.name} src={channel.avatar} />
+                <span className="conversation-main">
+                  <strong>{channel.name}</strong>
+                  <small>{channel.description || `${channel.memberCount} subscribers`}</small>
+                </span>
+                <span className="user-actions">
+                  {channel.isSubscribed ? (
+                    <button
+                      className="mini-icon-button"
+                      type="button"
+                      onClick={() => onUnsubscribeChannel(channel)}
+                      disabled={channelActionLoading === channel.conversationId || channel.role === 'owner'}
+                      title={channel.role === 'owner' ? 'Owner cannot leave' : 'Leave channel'}
+                    >
+                      <LogOut size={14} />
+                    </button>
+                  ) : (
+                    <button
+                      className="mini-icon-button"
+                      type="button"
+                      onClick={() => onSubscribeChannel(channel)}
+                      disabled={channelActionLoading === channel.conversationId}
+                      title="Subscribe"
+                    >
+                      <Radio size={14} />
+                    </button>
+                  )}
+                </span>
+              </div>
+            ))}
+          </section>
+        )}
+
         {!query && contacts.length > 0 && (
           <section className="search-results">
             <div className="section-label">Contacts</div>
@@ -224,7 +270,7 @@ export function ConversationList({
         )}
 
         <section>
-          {(users.length > 0 || contacts.length > 0 || blockedUsers.length > 0) && <div className="section-label">Chats</div>}
+          {(users.length > 0 || channelResults.length > 0 || contacts.length > 0 || blockedUsers.length > 0) && <div className="section-label">Chats</div>}
           {!loading && filteredConversations.length === 0 ? (
             <div className="empty-list">
               <Users size={28} />

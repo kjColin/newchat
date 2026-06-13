@@ -597,6 +597,28 @@
 **Response** (201)
 返回 channel conversation 对象，结构与 `GET /api/conversations` 中频道会话一致。
 
+### GET /api/channels/discover
+按名称或描述搜索可发现频道，并返回当前用户订阅状态。
+
+**Query**: `?q=<keyword>`
+
+**Response** (200)
+```json
+[
+  {
+    "id": "uuid",
+    "channelId": "uuid",
+    "conversationId": "uuid",
+    "name": "string",
+    "description": "string|null",
+    "avatar": null,
+    "memberCount": 12,
+    "isSubscribed": false,
+    "role": null
+  }
+]
+```
+
 ### PATCH /api/channels/:conversationId
 更新频道资料，要求当前用户为 owner 或 admin。
 
@@ -613,6 +635,23 @@
 
 **Response** (200)
 返回更新后的 channel conversation 对象。
+
+### POST /api/channels/:conversationId/subscribe
+订阅频道。已订阅时返回现有 channel conversation，不会重复创建成员关系。
+
+**Response** (201)
+返回 channel conversation 对象，结构与 `GET /api/conversations` 中频道会话一致。
+
+### DELETE /api/channels/:conversationId/subscribe
+退订频道。owner 不能通过该接口离开自己拥有的频道。
+
+**Response** (200)
+```json
+{
+  "conversationId": "uuid",
+  "channelId": "uuid"
+}
+```
 
 ### GET /api/channels/:conversationId/members
 获取频道订阅者列表，要求当前用户已在频道关联会话中。
@@ -638,7 +677,7 @@
 ]
 ```
 
-当前版本已支持频道创建、频道会话展示、频道详情和管理员发帖；公开频道目录、订阅/退订仍属于后续能力。
+当前版本已支持频道创建、频道会话展示、频道详情、管理员发帖、频道发现、订阅和退订。更细的公开/私有频道策略仍属于后续隐私设置能力。
 
 ---
 

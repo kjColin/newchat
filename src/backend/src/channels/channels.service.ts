@@ -77,6 +77,123 @@ export class ChannelsService {
     );
   }
 
+  async discover(userId: string, query = '') {
+    const q = query.trim();
+    const channels = await this.prisma.channel.findMany({
+      where: q
+        ? {
+          OR: [
+            { name: { contains: q, mode: 'insensitive' } },
+            { description: { contains: q, mode: 'insensitive' } },
+          ],
+        }
+        : undefined,
+      orderBy: [
+        { updatedAt: 'desc' },
+        { name: 'asc' },
+      ],
+      take: 30,
+      include: {
+        members: {
+          where: { userId },
+          select: { role: true },
+        },
+        _count: { select: { members: true } },
+      },
+    });
+
+    return channels.map(channel => ({
+      id: channel.id,
+      channelId: channel.id,
+      conversationId: channel.conversationId,
+      name: channel.name,
+      description: channel.description,
+      avatar: channel.avatar,
+      memberCount: channel._count.members,
+      isSubscribed: channel.members.length > 0,
+      role: channel.members[0]?.role || null,
+    }));
+  }
+
+  async subscribe(conversationId: string, userId: string) {
+    const channel = await this.prisma.channel.findUnique({
+      where: { conversationId },
+      include: {
+        conversation: { include: { messages: { take: 1, orderBy: { createdAt: 'desc' } } } },
+        members: { where: { userId }, select: { role: true } },
+        _count: { select: { members: true } },
+      },
+    });
+    if (!channel) throw new NotFoundException('Channel not found');
+
+    if (channel.members[0]) {
+      return this.conversationsService.formatChannelConversation(
+        channel,
+        channel.conversation,
+        channel._count.members,
+        { role: channel.members[0].role },
+      );
+    }
+
+    const subscribed = await this.prisma.$transaction(async prisma => {
+      await prisma.channelMember.create({
+        data: {
+          channelId: channel.id,
+          userId,
+          role: 'subscriber',
+        },
+      });
+
+      await prisma.userConversation.upsert({
+        where: { userId_conversationId: { userId, conversationId } },
+        update: {
+          archivedAt: null,
+        },
+        create: { userId, conversationId },
+      });
+
+      return prisma.channel.findUnique({
+        where: { id: channel.id },
+        include: {
+          conversation: { include: { messages: { take: 1, orderBy: { createdAt: 'desc' } } } },
+          _count: { select: { members: true } },
+        },
+      });
+    });
+
+    if (!subscribed) throw new NotFoundException('Channel not found');
+
+    return this.conversationsService.formatChannelConversation(
+      subscribed,
+      subscribed.conversation,
+      subscribed._count.members,
+      { role: 'subscriber' },
+    );
+  }
+
+  async unsubscribe(conversationId: string, userId: string) {
+    const channel = await this.prisma.channel.findUnique({
+      where: { conversationId },
+      include: { members: { where: { userId }, select: { id: true, role: true } } },
+    });
+    if (!channel) throw new NotFoundException('Channel not found');
+
+    const membership = channel.members[0];
+    if (!membership) throw new ForbiddenException('Not in channel');
+    if (membership.role === 'owner') {
+      throw new ForbiddenException('Channel owner cannot leave the channel');
+    }
+
+    await this.prisma.$transaction([
+      this.prisma.channelMember.delete({ where: { id: membership.id } }),
+      this.prisma.userConversation.deleteMany({
+        where: { userId, conversationId },
+      }),
+    ]);
+
+    return { conversationId, channelId: channel.id };
+  }
+
   async getMembers(conversationId: string, userId: string) {
     const channel = await this.getChannelForMember(conversationId, userId);
     return this.prisma.channelMember.findMany({

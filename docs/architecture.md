@@ -272,7 +272,10 @@ REST API 负责可重放、可校验的命令和查询。
 | `GET` | `/api/groups/invites/:code` | 预览邀请链接 |
 | `POST` | `/api/groups/invites/:code/join` | 通过邀请链接入群 |
 | `POST` | `/api/channels` | 创建频道 |
+| `GET` | `/api/channels/discover?q=` | 发现公开频道 |
 | `PATCH` | `/api/channels/:conversationId` | 更新频道资料 |
+| `POST` | `/api/channels/:conversationId/subscribe` | 订阅频道 |
+| `DELETE` | `/api/channels/:conversationId/subscribe` | 退订频道 |
 | `GET` | `/api/channels/:conversationId/members` | 频道订阅者列表 |
 | `POST` | `/api/files` | 上传附件 |
 
@@ -458,9 +461,8 @@ Data
 
 ### P2：扩展能力
 
-- 频道基础能力：创建频道、频道会话、频道详情、频道管理员发帖。
+- 频道基础能力：创建频道、频道会话、频道详情、频道管理员发帖、频道发现、订阅和退订。
 - 公开群和群目录。
-- 公开频道目录、订阅/退订和频道发现。
 - 隐私设置。
 - 联系人资料页中的历史链接筛选和链接预览元数据增强。
 - Bot API 简化版。

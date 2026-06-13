@@ -160,6 +160,18 @@ export type GroupMember = {
   user: SearchUser;
 };
 
+export type ChannelDiscoveryItem = {
+  id: string;
+  channelId: string;
+  conversationId: string;
+  name: string;
+  description?: string | null;
+  avatar?: string | null;
+  memberCount: number;
+  isSubscribed: boolean;
+  role?: 'owner' | 'admin' | 'subscriber' | null;
+};
+
 export type InviteLink = {
   id: string;
   groupId: string;

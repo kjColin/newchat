@@ -2,6 +2,7 @@ import { apiClient } from '../../shared/api/client';
 import type {
   Attachment,
   AttachmentsResponse,
+  ChannelDiscoveryItem,
   Conversation,
   GroupMember,
   InviteLink,
@@ -168,6 +169,23 @@ export async function getGroupMembers(conversationId: string) {
 
 export async function getChannelMembers(conversationId: string) {
   const { data } = await apiClient.get<GroupMember[]>(`/channels/${conversationId}/members`);
+  return data;
+}
+
+export async function discoverChannels(query = '') {
+  const { data } = await apiClient.get<ChannelDiscoveryItem[]>('/channels/discover', {
+    params: { q: query },
+  });
+  return data;
+}
+
+export async function subscribeChannel(conversationId: string) {
+  const { data } = await apiClient.post<Conversation>(`/channels/${conversationId}/subscribe`);
+  return data;
+}
+
+export async function unsubscribeChannel(conversationId: string) {
+  const { data } = await apiClient.delete<{ conversationId: string; channelId: string }>(`/channels/${conversationId}/subscribe`);
   return data;
 }
 
