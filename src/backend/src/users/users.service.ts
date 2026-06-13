@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 
 @Injectable()
@@ -13,12 +13,21 @@ export class UsersService {
   }
 
   async update(id: string, data: { username?: string; avatar?: string }) {
+    const username = data.username?.trim();
+    const avatar = data.avatar?.trim();
     const updateData = {
-      username: data.username?.trim(),
-      avatar: data.avatar?.trim(),
+      username,
+      avatar: data.avatar === undefined ? undefined : avatar || null,
     };
-    if (updateData.username !== undefined && updateData.username.length === 0) {
-      throw new BadRequestException('Username cannot be empty');
+    if (username !== undefined && (username.length < 2 || username.length > 32)) {
+      throw new BadRequestException('Username must be 2-32 characters');
+    }
+
+    if (username !== undefined) {
+      const existing = await this.prisma.user.findUnique({ where: { username } });
+      if (existing && existing.id !== id) {
+        throw new ConflictException('Username already exists');
+      }
     }
 
     const user = await this.prisma.user.update({

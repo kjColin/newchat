@@ -82,6 +82,20 @@
 }
 ```
 
+`username` 会去除首尾空格，长度为 2-32 字符且必须唯一；`avatar` 为空字符串时会清空头像。
+
+**Response** (200)
+```json
+{
+  "id": "uuid",
+  "username": "string",
+  "email": "string",
+  "avatar": "url|null",
+  "status": "online|offline",
+  "lastSeen": "timestamp"
+}
+```
+
 ---
 
 ## 会话 API

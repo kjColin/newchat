@@ -1,4 +1,4 @@
-import { Archive, BellOff, Link2, LogOut, MessageCircle, Pin, PinOff, Plus, Search, Users } from 'lucide-react';
+import { Archive, BellOff, Link2, LogOut, MessageCircle, Pin, PinOff, Plus, Search, Settings, Users } from 'lucide-react';
 import { Avatar } from '../../../shared/components/Avatar';
 import { formatConversationTime } from '../../../shared/utils/time';
 import type { User } from '../../auth/types';
@@ -21,6 +21,7 @@ type ConversationListProps = {
   onSelectConversation: (conversation: Conversation) => void;
   onStartDirect: (user: SearchUser) => void;
   onOpenCreateGroup: () => void;
+  onOpenProfile: () => void;
   onLogout: () => void;
   onTogglePinned: (conversation: Conversation) => void;
   onToggleMuted: (conversation: Conversation) => void;
@@ -43,6 +44,7 @@ export function ConversationList({
   onSelectConversation,
   onStartDirect,
   onOpenCreateGroup,
+  onOpenProfile,
   onLogout,
   onTogglePinned,
   onToggleMuted,
@@ -59,13 +61,14 @@ export function ConversationList({
   return (
     <aside className="chat-sidebar">
       <div className="sidebar-topbar">
-        <div className="account-chip">
+        <button className="account-chip" type="button" onClick={onOpenProfile} title="Edit profile">
           <Avatar name={currentUser.username} src={currentUser.avatar} status="online" size="sm" />
-          <div>
+          <span className="account-copy">
             <strong>{currentUser.username}</strong>
             <span>{currentUser.email}</span>
-          </div>
-        </div>
+          </span>
+          <Settings size={15} />
+        </button>
         <button className="icon-button" type="button" onClick={onLogout} aria-label="Logout" title="Logout">
           <LogOut size={18} />
         </button>

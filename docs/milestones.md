@@ -54,7 +54,7 @@
 | 置顶消息 | fullstack | ✅ |
 | 群公告 | fullstack | ✅ |
 | 消息已读状态 | backend | ✅ |
-| 用户头像 | frontend | ⏳ |
+| 用户头像/资料编辑 | fullstack | ✅ |
 | 搜索功能 | backend | ✅ |
 | 性能优化 | all | ⏳ |
 
@@ -88,7 +88,7 @@
 ```
 Milestone 1: ████████░░ 80%
 Milestone 2: ████████░░ 80%
-Milestone 3: ██████░░░░ 60%
+Milestone 3: ███████░░░ 70%
 Milestone 4: ░░░░░░░░░░  0%
 ```
 

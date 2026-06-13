@@ -15,7 +15,7 @@ NewChat 是一个面向即时通讯场景的 Web 聊天应用，目标体验参�
 
 ### 2.1 产品目标
 
-- 支持用户注册、登录、个人资料与头像。
+- 支持用户注册、登录、个人资料与头像编辑。
 - 支持用户搜索、单聊、群聊、群成员管理、群邀请链接。
 - 支持实时消息、输入中、在线状态、已读状态。
 - 支持消息编辑、删除、表情反应、回复、转发。
@@ -255,7 +255,7 @@ REST API 负责可重放、可校验的命令和查询。
 | `POST` | `/api/auth/register` | 注册 |
 | `POST` | `/api/auth/login` | 登录 |
 | `GET` | `/api/users/me` | 当前用户 |
-| `PATCH` | `/api/users/me` | 更新个人资料 |
+| `PATCH` | `/api/users/me` | 更新用户名和头像 |
 | `GET` | `/api/users/search?q=` | 搜索用户 |
 | `GET` | `/api/conversations` | 会话列表 |
 | `POST` | `/api/conversations/direct` | 创建/获取单聊 |
@@ -366,6 +366,7 @@ Client selects file
 - JWT secret 必须来自环境变量，生产环境禁止默认值。
 - 密码使用 bcrypt 哈希，禁止返回 password 字段。
 - 所有写接口使用 DTO 和 class-validator。
+- 当前用户资料更新需校验用户名唯一性，并允许用户清空头像。
 - 所有会话、消息、群操作必须校验参与者或管理员权限。
 - 上传文件限制大小、扩展名、MIME 类型，必要时接入病毒扫描。
 - Rate limit 应从内存实现迁移到 Redis，支持多实例。

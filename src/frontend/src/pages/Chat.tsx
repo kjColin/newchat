@@ -39,7 +39,8 @@ import { connectChatSocket, joinConversation, startTyping, stopTyping } from '..
 import type { ChatSocket } from '../features/chats/socket';
 import type { Attachment, Conversation, GroupMember, InviteLink, Message, PinnedMessage } from '../features/chats/types';
 import { CreateGroupModal } from '../features/groups/components/CreateGroupModal';
-import { searchUsers } from '../features/users/api';
+import { ProfileModal } from '../features/users/components/ProfileModal';
+import { getCurrentUser, searchUsers, updateCurrentUser } from '../features/users/api';
 import type { SearchUser } from '../features/users/types';
 import './Chat.css';
 
@@ -111,7 +112,8 @@ function parseInviteCode(value: string) {
 
 export function ChatPage() {
   const navigate = useNavigate();
-  const currentUser = useMemo(() => authStore.getUser(), []) as User | null;
+  const initialUser = useMemo(() => authStore.getUser(), []) as User | null;
+  const [currentUser, setCurrentUser] = useState<User | null>(initialUser);
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [activeConversation, setActiveConversation] = useState<Conversation | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -161,6 +163,12 @@ export function ChatPage() {
   const [inviteLoading, setInviteLoading] = useState(false);
   const [inviteInput, setInviteInput] = useState('');
   const [joiningInvite, setJoiningInvite] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
+  const [profileUsername, setProfileUsername] = useState('');
+  const [profileAvatar, setProfileAvatar] = useState('');
+  const [profileSaving, setProfileSaving] = useState(false);
+  const [profileError, setProfileError] = useState('');
+  const [profileNotice, setProfileNotice] = useState('');
   const activeConversationId = useRef<string | null>(null);
   const handledInviteCode = useRef<string | null>(null);
   const typingTimer = useRef<number | null>(null);
@@ -251,6 +259,24 @@ export function ChatPage() {
       navigate('/login', { replace: true });
     }
   }, [currentUser, navigate]);
+
+  useEffect(() => {
+    const token = authStore.getToken();
+    if (!token) return;
+
+    let cancelled = false;
+    getCurrentUser()
+      .then(user => {
+        if (cancelled) return;
+        authStore.setSession(token, user);
+        setCurrentUser(user);
+      })
+      .catch(() => undefined);
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     activeConversationId.current = activeConversation?.id || null;
@@ -719,6 +745,60 @@ export function ChatPage() {
     navigate('/login', { replace: true });
   };
 
+  const openProfile = () => {
+    if (!currentUser) return;
+    setProfileUsername(currentUser.username);
+    setProfileAvatar(currentUser.avatar || '');
+    setProfileError('');
+    setProfileNotice('');
+    setProfileOpen(true);
+  };
+
+  const saveProfile = async () => {
+    if (!currentUser || profileSaving) return;
+    const username = profileUsername.trim();
+    if (username.length < 2) {
+      setProfileError('Username must be at least 2 characters');
+      return;
+    }
+
+    setProfileSaving(true);
+    setProfileError('');
+    setProfileNotice('');
+    try {
+      const updated = await updateCurrentUser({ username, avatar: profileAvatar });
+      const token = authStore.getToken();
+      if (token) {
+        authStore.setSession(token, updated);
+      }
+      setCurrentUser(updated);
+      setProfileUsername(updated.username);
+      setProfileAvatar(updated.avatar || '');
+      setMessages(prev => prev.map(message =>
+        message.senderId === updated.id
+          ? { ...message, sender: { ...(message.sender || {}), id: updated.id, username: updated.username, avatar: updated.avatar } }
+          : message
+      ));
+      setPinnedMessages(prev => prev.map(pinned => ({
+        ...pinned,
+        pinnedBy: pinned.pinnedById === updated.id
+          ? { ...(pinned.pinnedBy || {}), id: updated.id, username: updated.username, avatar: updated.avatar }
+          : pinned.pinnedBy,
+        message: pinned.message.senderId === updated.id
+          ? { ...pinned.message, sender: { ...(pinned.message.sender || {}), id: updated.id, username: updated.username, avatar: updated.avatar } }
+          : pinned.message,
+      })));
+      setMembers(prev => prev.map(member =>
+        member.userId === updated.id ? { ...member, user: { ...member.user, ...updated } } : member
+      ));
+      setProfileNotice('Profile saved');
+    } catch (error: any) {
+      setProfileError(error.response?.data?.message || 'Could not update profile');
+    } finally {
+      setProfileSaving(false);
+    }
+  };
+
   const handleTogglePinned = async (conversation: Conversation) => {
     try {
       setConversations(sortConversations(await updateConversationSettings(conversation.id, { pinned: !conversation.pinnedAt })));
@@ -911,6 +991,7 @@ export function ChatPage() {
         onSelectConversation={selectConversation}
         onStartDirect={handleStartDirect}
         onOpenCreateGroup={() => setCreateGroupOpen(true)}
+        onOpenProfile={openProfile}
         onLogout={logout}
         onTogglePinned={handleTogglePinned}
         onToggleMuted={handleToggleMuted}
@@ -1040,6 +1121,20 @@ export function ChatPage() {
         onToggleUser={toggleMember}
         onSubmit={handleCreateGroup}
         onClose={() => setCreateGroupOpen(false)}
+      />
+
+      <ProfileModal
+        open={profileOpen}
+        user={currentUser}
+        username={profileUsername}
+        avatar={profileAvatar}
+        submitting={profileSaving}
+        error={profileError}
+        notice={profileNotice}
+        onUsernameChange={setProfileUsername}
+        onAvatarChange={setProfileAvatar}
+        onSubmit={saveProfile}
+        onClose={() => setProfileOpen(false)}
       />
 
       <ConversationDetails
