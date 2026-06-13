@@ -61,18 +61,8 @@ import {
   updateCurrentUser,
 } from '../features/users/api';
 import type { BlockedUserEntry, ContactEntry, SearchUser } from '../features/users/types';
-import { getBrowserNotificationState, requestBrowserNotificationPermission, showBrowserNotification, subscribeToWebPush } from '../features/notifications/browser-notifications';
 import { NotificationMenu } from '../features/notifications/components/NotificationMenu';
-import type { BrowserNotificationState, NotificationItem } from '../features/notifications/types';
-import {
-  clearNotifications as clearStoredNotifications,
-  getNotifications,
-  getPushPublicKey,
-  markAllNotificationsRead as markAllStoredNotificationsRead,
-  markConversationNotificationsRead,
-  markNotificationRead,
-  savePushSubscription,
-} from '../features/notifications/api';
+import { useNotifications } from '../features/notifications/useNotifications';
 import './Chat.css';
 
 function upsertConversation(list: Conversation[], conversation: Conversation) {
@@ -221,9 +211,6 @@ export function ChatPage() {
   const [profileSaving, setProfileSaving] = useState(false);
   const [profileError, setProfileError] = useState('');
   const [profileNotice, setProfileNotice] = useState('');
-  const [notifications, setNotifications] = useState<NotificationItem[]>([]);
-  const [notificationsOpen, setNotificationsOpen] = useState(false);
-  const [browserNotificationState, setBrowserNotificationState] = useState<BrowserNotificationState>(() => getBrowserNotificationState());
   const activeConversationId = useRef<string | null>(null);
   const handledInviteCode = useRef<string | null>(null);
   const typingTimer = useRef<number | null>(null);
@@ -232,10 +219,26 @@ export function ChatPage() {
   const conversationsRef = useRef<Conversation[]>([]);
   const selectConversationRef = useRef<(conversation: Conversation) => Promise<void>>();
   const pinnedMessageIds = useMemo(() => new Set(pinnedMessages.map(item => item.messageId)), [pinnedMessages]);
-  const unreadNotificationCount = useMemo(
-    () => notifications.filter(notification => !notification.read).length,
-    [notifications],
-  );
+  const {
+    notifications,
+    notificationsOpen,
+    unreadNotificationCount,
+    browserNotificationState,
+    setNotificationsOpen,
+    markConversationNotificationsLocalRead,
+    receiveNotification,
+    enableBrowserNotifications,
+    selectNotification,
+    markAllNotificationsRead,
+    clearNotifications,
+    showBrowserNotification,
+  } = useNotifications({
+    activeConversationId: activeConversation?.id || null,
+    conversations,
+    onSelectConversation: async conversation => {
+      await selectConversationRef.current?.(conversation);
+    },
+  });
   const activeDirectBlocked = Boolean(activeConversation?.type === 'direct' && activeConversation.user?.isBlocked);
   const activeChannelReadOnly = Boolean(
     activeConversation?.type === 'channel' &&
@@ -261,11 +264,7 @@ export function ChatPage() {
     setShowJumpLatest(false);
     setDetailsOpen(false);
     setMobileConversationOpen(true);
-    setNotificationsOpen(false);
-    setNotifications(prev => prev.map(notification =>
-      notification.conversationId === conversation.id ? { ...notification, read: true } : notification
-    ));
-    markConversationNotificationsRead(conversation.id).catch(() => undefined);
+    markConversationNotificationsLocalRead(conversation.id);
     setLoadingMessages(true);
     setMessageError('');
     joinConversation(socket, conversation.id);
@@ -301,7 +300,7 @@ export function ChatPage() {
     } finally {
       setLoadingMessages(false);
     }
-  }, [socket]);
+  }, [socket, markConversationNotificationsLocalRead]);
 
   const showMessageNotification = useCallback((message: Message) => {
     const conversation = conversationsRef.current.find(item => item.id === message.conversationId);
@@ -423,16 +422,7 @@ export function ChatPage() {
       }
     });
     ws.on('notification', notification => {
-      const nextNotification = activeConversationId.current === notification.conversationId
-        ? { ...notification, read: true }
-        : notification;
-      if (nextNotification.read) {
-        markConversationNotificationsRead(notification.conversationId).catch(() => undefined);
-      }
-      setNotifications(prev => {
-        const next = [nextNotification, ...prev.filter(item => item.id !== notification.id)];
-        return next.slice(0, 30);
-      });
+      receiveNotification(notification);
     });
     ws.on('message:updated', message => {
       setMessages(prev => prev.map(item => item.id === message.id ? message : item));
@@ -492,7 +482,7 @@ export function ChatPage() {
     return () => {
       ws.disconnect();
     };
-  }, [showMessageNotification, currentUser?.id]);
+  }, [showMessageNotification, receiveNotification, currentUser?.id]);
 
   useEffect(() => {
     async function load() {
@@ -527,12 +517,6 @@ export function ChatPage() {
     }
 
     loadRelationships();
-  }, []);
-
-  useEffect(() => {
-    getNotifications()
-      .then(setNotifications)
-      .catch(() => setNotifications([]));
   }, []);
 
   useEffect(() => {
@@ -1115,44 +1099,6 @@ export function ChatPage() {
     } finally {
       setProfileSaving(false);
     }
-  };
-
-  const enableBrowserNotifications = async () => {
-    const permission = await requestBrowserNotificationPermission();
-    setBrowserNotificationState(permission as BrowserNotificationState);
-    if (permission !== 'granted') return;
-
-    try {
-      const pushConfig = await getPushPublicKey();
-      if (!pushConfig.enabled || !pushConfig.publicKey) return;
-
-      const subscription = await subscribeToWebPush(pushConfig.publicKey);
-      if (subscription) {
-        await savePushSubscription(subscription);
-      }
-    } catch {
-      // Browser notifications still work in the foreground when Web Push is unavailable.
-    }
-  };
-
-  const selectNotification = async (notification: NotificationItem) => {
-    setNotifications(prev => prev.map(item => item.id === notification.id ? { ...item, read: true } : item));
-    markNotificationRead(notification.id).catch(() => undefined);
-    const conversation = conversations.find(item => item.id === notification.conversationId);
-    if (conversation) {
-      await selectConversation(conversation);
-    }
-  };
-
-  const markAllNotificationsRead = () => {
-    setNotifications(prev => prev.map(notification => ({ ...notification, read: true })));
-    markAllStoredNotificationsRead().catch(() => undefined);
-  };
-
-  const clearNotifications = () => {
-    setNotifications([]);
-    setNotificationsOpen(false);
-    clearStoredNotifications().catch(() => undefined);
   };
 
   const handleTogglePinned = async (conversation: Conversation) => {
