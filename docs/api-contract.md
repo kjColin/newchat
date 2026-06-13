@@ -720,6 +720,8 @@
 
 通知由服务端在消息创建后写入，排除发送者本人，并遵守会话免打扰设置。前端启动时通过 REST 恢复通知列表，在线时通过 `notification` Socket 事件增量更新。
 
+服务端会按 `NOTIFICATION_RETENTION_DAYS` 删除过期通知，并按 `NOTIFICATION_MAX_PER_USER` 保留每个用户最近的通知；后台清理周期由 `NOTIFICATION_CLEANUP_INTERVAL_MINUTES` 控制。默认值分别为 30 天、100 条和 60 分钟。
+
 ### GET /api/notifications
 获取当前用户最近通知。
 

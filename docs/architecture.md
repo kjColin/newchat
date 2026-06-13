@@ -377,6 +377,14 @@ Client selects file
 
 当前实现先使用后端本地 `uploads/` 目录保存文件，并通过 `/uploads/...` 静态路径访问；生产建议迁移到 S3 兼容对象存储，并保留数据库中的附件元数据。
 
+### 9.6 通知保留策略
+
+- `Notification` 是站内通知的可恢复数据源，Socket `notification` 只负责在线增量投递。
+- 服务启动后会执行一次通知清理，之后按 `NOTIFICATION_CLEANUP_INTERVAL_MINUTES` 周期执行。
+- `NOTIFICATION_RETENTION_DAYS` 控制过期删除，默认 30 天。
+- `NOTIFICATION_MAX_PER_USER` 控制每个用户最多保留最近通知数量，默认 100 条。
+- 新消息生成通知后会立即对接收者执行上限裁剪，避免高频会话无限增长。
+
 ## 10. 安全设计
 
 - JWT secret 必须来自环境变量，生产环境禁止默认值。
@@ -487,7 +495,7 @@ Data
 - `.env`、`dist`、`node_modules`、备份文件出现在工作区，版本管理边界不清。
 - JWT 默认 secret 为 `secret`，生产环境存在安全风险。
 - 自动化测试覆盖不足，当前主要依赖构建和手工验证。
-- 站内通知已持久化；Web Push、通知保留策略和批量清理仍待生产化。
+- 站内通知已持久化并支持保留策略；Web Push 仍待生产化。
 - `Chat.tsx` 状态过多，继续加功能会难以维护。
 
 ## 15. 近期落地建议
@@ -497,7 +505,7 @@ Data
 1. 清理工程边界和配置安全。
 2. 扩展 e2e 覆盖：文件消息、邀请入群、频道、隐私设置。
 3. 将 `Chat.tsx` 拆为会话、消息、详情、Socket 等 hooks。
-4. 扩展 Web Push、通知保留策略和批量清理。
+4. 扩展 Web Push。
 5. 规划 Redis adapter、对象存储和消息队列接入。
 
 这条路线能在不推翻现有 NestJS + React 架构的前提下，把当前应用从基础聊天应用平滑演进为更接近 Telegram 的实时通信产品。

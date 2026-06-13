@@ -2,6 +2,7 @@ import { INestApplication, ValidationPipe } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import request = require('supertest');
 import { AppModule } from '../src/app.module';
+import { NotificationsService } from '../src/notifications/notifications.service';
 import { PrismaService } from '../src/prisma/prisma.service';
 
 type TestUser = {
@@ -14,19 +15,18 @@ type TestUser = {
 describe('Chat flow (e2e)', () => {
   let app: INestApplication;
   let prisma: PrismaService;
+  let notificationsService: NotificationsService;
   const runId = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-  const users = [
-    {
-      username: `a_${runId}`.slice(0, 32),
-      email: `e2e_alice_${runId}@example.com`,
+  const registeredEmails: string[] = [];
+
+  function userFixture(label: string, index: number) {
+    const normalized = label.replace(/[^a-z0-9]/gi, '_').toLowerCase();
+    return {
+      username: `${normalized}_${index}_${runId}`.slice(0, 32),
+      email: `e2e_${normalized}_${index}_${runId}@example.com`,
       password: 'Passw0rd!123',
-    },
-    {
-      username: `b_${runId}`.slice(0, 32),
-      email: `e2e_bob_${runId}@example.com`,
-      password: 'Passw0rd!123',
-    },
-  ];
+    };
+  }
 
   beforeAll(async () => {
     const moduleRef = await Test.createTestingModule({
@@ -43,12 +43,12 @@ describe('Chat flow (e2e)', () => {
     await app.init();
 
     prisma = app.get(PrismaService);
+    notificationsService = app.get(NotificationsService);
   });
 
   afterAll(async () => {
-    const emails = users.map(user => user.email);
     const testUsers = await prisma.user.findMany({
-      where: { email: { in: emails } },
+      where: { email: { in: registeredEmails } },
       select: { id: true },
     });
     const userIds = testUsers.map(user => user.id);
@@ -60,6 +60,7 @@ describe('Chat flow (e2e)', () => {
       }).then(rows => [...new Set(rows.map(row => row.conversationId))]);
 
       await prisma.$transaction([
+        prisma.notification.deleteMany({ where: { OR: [{ userId: { in: userIds } }, { conversationId: { in: conversationIds } }] } }),
         prisma.messageReaction.deleteMany({ where: { userId: { in: userIds } } }),
         prisma.pinnedMessage.deleteMany({ where: { pinnedById: { in: userIds } } }),
         prisma.attachment.deleteMany({ where: { uploaderId: { in: userIds } } }),
@@ -80,14 +81,16 @@ describe('Chat flow (e2e)', () => {
     await app.close();
   });
 
-  async function register(index: number): Promise<TestUser> {
+  async function register(label: string, index: number): Promise<TestUser> {
+    const user = userFixture(label, index);
     const response = await request(app.getHttpServer())
       .post('/api/auth/register')
-      .send(users[index])
+      .send(user)
       .expect(201);
 
     expect(response.body.token).toEqual(expect.any(String));
-    expect(response.body.user.email).toBe(users[index].email);
+    expect(response.body.user.email).toBe(user.email);
+    registeredEmails.push(user.email);
 
     return {
       id: response.body.user.id,
@@ -98,12 +101,12 @@ describe('Chat flow (e2e)', () => {
   }
 
   it('registers, logs in, creates direct and group chats, and sends messages', async () => {
-    const alice = await register(0);
-    const bob = await register(1);
+    const alice = await register('flow_alice', 0);
+    const bob = await register('flow_bob', 1);
 
     const login = await request(app.getHttpServer())
       .post('/api/auth/login')
-      .send({ email: alice.email, password: users[0].password })
+      .send({ email: alice.email, password: 'Passw0rd!123' })
       .expect(200);
     expect(login.body.user.id).toBe(alice.id);
     expect(login.body.token).toEqual(expect.any(String));
@@ -151,5 +154,74 @@ describe('Chat flow (e2e)', () => {
       .set('Authorization', `Bearer ${alice.token}`)
       .expect(200);
     expect(conversations.body.map((item: any) => item.id)).toEqual(expect.arrayContaining([direct.body.id, group.body.id]));
+  });
+
+  it('persists notifications, marks them read, and prunes expired notifications', async () => {
+    const alice = await register('notify_alice', 0);
+    const bob = await register('notify_bob', 1);
+
+    const direct = await request(app.getHttpServer())
+      .post('/api/conversations/direct')
+      .set('Authorization', `Bearer ${alice.token}`)
+      .send({ userId: bob.id })
+      .expect(201);
+
+    await request(app.getHttpServer())
+      .post('/api/messages')
+      .set('Authorization', `Bearer ${alice.token}`)
+      .send({
+        conversationId: direct.body.id,
+        content: 'notification e2e',
+        clientId: `notification-${runId}`,
+      })
+      .expect(201);
+
+    const list = await request(app.getHttpServer())
+      .get('/api/notifications')
+      .set('Authorization', `Bearer ${bob.token}`)
+      .expect(200);
+
+    expect(list.body).toHaveLength(1);
+    expect(list.body[0]).toMatchObject({
+      conversationId: direct.body.id,
+      title: alice.username,
+      body: 'notification e2e',
+      read: false,
+    });
+
+    await request(app.getHttpServer())
+      .patch(`/api/notifications/${list.body[0].id}/read`)
+      .set('Authorization', `Bearer ${bob.token}`)
+      .expect(200)
+      .expect(response => {
+        expect(response.body.updated).toBe(1);
+      });
+
+    const readList = await request(app.getHttpServer())
+      .get('/api/notifications')
+      .set('Authorization', `Bearer ${bob.token}`)
+      .expect(200);
+    expect(readList.body[0].read).toBe(true);
+
+    await prisma.notification.create({
+      data: {
+        userId: bob.id,
+        conversationId: direct.body.id,
+        title: 'expired',
+        body: 'expired body',
+        createdAt: new Date(Date.now() - 31 * 24 * 60 * 60 * 1000),
+      },
+    });
+
+    const cleanup = await notificationsService.cleanup();
+    expect(cleanup.deletedExpired).toBeGreaterThanOrEqual(1);
+
+    const remainingExpired = await prisma.notification.count({
+      where: {
+        userId: bob.id,
+        title: 'expired',
+      },
+    });
+    expect(remainingExpired).toBe(0);
   });
 });

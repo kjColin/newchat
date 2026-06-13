@@ -1,9 +1,30 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import {
+  getNotificationCleanupIntervalMs,
+  getNotificationMaxPerUser,
+  getNotificationRetentionDays,
+} from '../common/config';
 
 @Injectable()
-export class NotificationsService {
+export class NotificationsService implements OnModuleInit, OnModuleDestroy {
+  private readonly logger = new Logger(NotificationsService.name);
+  private readonly retentionDays = getNotificationRetentionDays();
+  private readonly maxPerUser = getNotificationMaxPerUser();
+  private readonly cleanupIntervalMs = getNotificationCleanupIntervalMs();
+  private cleanupTimer?: NodeJS.Timeout;
+
   constructor(private prisma: PrismaService) {}
+
+  onModuleInit() {
+    this.runCleanup('startup');
+    this.cleanupTimer = setInterval(() => this.runCleanup('scheduled'), this.cleanupIntervalMs);
+    this.cleanupTimer.unref?.();
+  }
+
+  onModuleDestroy() {
+    if (this.cleanupTimer) clearInterval(this.cleanupTimer);
+  }
 
   async list(userId: string, limit = 30) {
     const notifications = await this.prisma.notification.findMany({
@@ -50,6 +71,8 @@ export class NotificationsService {
       })),
     });
 
+    await Promise.all(participants.map(participant => this.pruneUserNotifications(participant.userId)));
+
     const created = await this.prisma.notification.findMany({
       where: {
         messageId: message.id,
@@ -94,6 +117,68 @@ export class NotificationsService {
     });
 
     return { deleted: result.count };
+  }
+
+  async cleanup() {
+    const expired = await this.deleteExpiredNotifications();
+    const users = await this.prisma.notification.findMany({
+      distinct: ['userId'],
+      select: { userId: true },
+    });
+    const overflowResults = await Promise.all(
+      users.map(user => this.pruneUserNotifications(user.userId)),
+    );
+
+    return {
+      deletedExpired: expired.deleted,
+      deletedOverflow: overflowResults.reduce((sum, result) => sum + result.deleted, 0),
+      retentionDays: this.retentionDays,
+      maxPerUser: this.maxPerUser,
+    };
+  }
+
+  private async deleteExpiredNotifications() {
+    const cutoff = new Date(Date.now() - this.retentionDays * 24 * 60 * 60 * 1000);
+    const result = await this.prisma.notification.deleteMany({
+      where: { createdAt: { lt: cutoff } },
+    });
+
+    return { deleted: result.count, cutoff };
+  }
+
+  private async pruneUserNotifications(userId: string) {
+    const overflow = await this.prisma.notification.findMany({
+      where: { userId },
+      orderBy: [
+        { createdAt: 'desc' },
+        { id: 'desc' },
+      ],
+      skip: this.maxPerUser,
+      select: { id: true },
+    });
+
+    if (overflow.length === 0) return { deleted: 0 };
+
+    const result = await this.prisma.notification.deleteMany({
+      where: { id: { in: overflow.map(notification => notification.id) } },
+    });
+
+    return { deleted: result.count };
+  }
+
+  private runCleanup(reason: string) {
+    this.cleanup()
+      .then(result => {
+        if (result.deletedExpired || result.deletedOverflow) {
+          this.logger.log(
+            `Notification cleanup (${reason}) deleted ${result.deletedExpired} expired and ${result.deletedOverflow} overflow notifications`,
+          );
+        }
+      })
+      .catch(error => {
+        const message = error instanceof Error ? error.message : String(error);
+        this.logger.warn(`Notification cleanup (${reason}) failed: ${message}`);
+      });
   }
 
   private notificationTitle(message: any, conversation: any) {
