@@ -481,7 +481,7 @@ Data
 - 保持 `ConversationsService`、`GroupsService`、`ChannelsService` 的边界清晰。
 - 为 REST 请求补全 DTO。
 - 修复消息 cursor 分页。
-- 已增加基础 e2e 测试：注册、登录、单聊、群聊、发消息。
+- 已增加 e2e 测试：注册、登录、单聊、群聊、发消息、通知、文件消息、邀请入群、频道订阅/权限、隐私设置。
 
 ### P1：Telegram 核心体验
 
@@ -508,7 +508,7 @@ Data
 - `newchat` 目录与实际运行目录不一致，容易导致部署和维护误操作。
 - `.env`、`dist`、`node_modules`、备份文件出现在工作区，版本管理边界不清。
 - 生产环境已强制校验 `JWT_SECRET` 和 `CORS_ORIGINS`；部署时必须提供真实密钥和前端域名。
-- 自动化测试覆盖不足，当前主要依赖构建和手工验证。
+- 自动化测试已覆盖核心 REST 流程；Socket、多设备和 Web Push 仍需要补充自动化验证。
 - 站内通知已持久化并支持保留策略；Web Push 仍待生产化。
 - `Chat.tsx` 状态过多，继续加功能会难以维护。
 
@@ -517,7 +517,7 @@ Data
 优先顺序：
 
 1. 清理工程边界，统一 `newchat` 与 `chat-app` 的部署目录关系。
-2. 扩展 e2e 覆盖：文件消息、邀请入群、频道、隐私设置。
+2. 扩展自动化覆盖：Socket 实时事件、多设备在线状态、通知/Web Push。
 3. 将 `Chat.tsx` 拆为会话、消息、详情、Socket 等 hooks。
 4. 扩展 Web Push。
 5. 规划 Redis adapter、对象存储和消息队列接入。

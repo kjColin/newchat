@@ -17,6 +17,7 @@ describe('Chat flow (e2e)', () => {
   let prisma: PrismaService;
   let notificationsService: NotificationsService;
   const runId = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  const password = 'Passw0rd!123';
   const registeredEmails: string[] = [];
 
   function userFixture(label: string, index: number) {
@@ -24,7 +25,7 @@ describe('Chat flow (e2e)', () => {
     return {
       username: `${normalized}_${index}_${runId}`.slice(0, 32),
       email: `e2e_${normalized}_${index}_${runId}@example.com`,
-      password: 'Passw0rd!123',
+      password,
     };
   }
 
@@ -106,7 +107,7 @@ describe('Chat flow (e2e)', () => {
 
     const login = await request(app.getHttpServer())
       .post('/api/auth/login')
-      .send({ email: alice.email, password: 'Passw0rd!123' })
+      .send({ email: alice.email, password })
       .expect(200);
     expect(login.body.user.id).toBe(alice.id);
     expect(login.body.token).toEqual(expect.any(String));
@@ -223,5 +224,188 @@ describe('Chat flow (e2e)', () => {
       },
     });
     expect(remainingExpired).toBe(0);
+  });
+
+  it('uploads an attachment, sends a file message, and lists conversation attachments', async () => {
+    const alice = await register('file_alice', 0);
+    const bob = await register('file_bob', 1);
+
+    const direct = await request(app.getHttpServer())
+      .post('/api/conversations/direct')
+      .set('Authorization', `Bearer ${alice.token}`)
+      .send({ userId: bob.id })
+      .expect(201);
+
+    const upload = await request(app.getHttpServer())
+      .post('/api/files')
+      .set('Authorization', `Bearer ${alice.token}`)
+      .attach('file', Buffer.from('hello attachment from e2e'), {
+        filename: 'e2e-note.txt',
+        contentType: 'text/plain',
+      })
+      .expect(201);
+
+    expect(upload.body).toMatchObject({
+      uploaderId: alice.id,
+      kind: 'file',
+      fileName: 'e2e-note.txt',
+      mimeType: 'text/plain',
+    });
+
+    const message = await request(app.getHttpServer())
+      .post('/api/messages')
+      .set('Authorization', `Bearer ${alice.token}`)
+      .send({
+        conversationId: direct.body.id,
+        content: '',
+        type: 'file',
+        attachmentIds: [upload.body.id],
+        clientId: `file-${runId}`,
+      })
+      .expect(201);
+
+    expect(message.body.attachments).toHaveLength(1);
+    expect(message.body.attachments[0]).toMatchObject({
+      id: upload.body.id,
+      fileName: 'e2e-note.txt',
+      kind: 'file',
+    });
+
+    const attachments = await request(app.getHttpServer())
+      .get(`/api/messages/${direct.body.id}/attachments`)
+      .set('Authorization', `Bearer ${bob.token}`)
+      .expect(200);
+
+    expect(attachments.body.attachments.map((item: any) => item.id)).toContain(upload.body.id);
+  });
+
+  it('creates invite links, previews them, and joins groups by invite', async () => {
+    const alice = await register('invite_alice', 0);
+    const bob = await register('invite_bob', 1);
+
+    const group = await request(app.getHttpServer())
+      .post('/api/groups')
+      .set('Authorization', `Bearer ${alice.token}`)
+      .send({ name: `Invite Group ${runId}`, members: [] })
+      .expect(201);
+
+    const invite = await request(app.getHttpServer())
+      .post(`/api/groups/${group.body.id}/invites`)
+      .set('Authorization', `Bearer ${alice.token}`)
+      .expect(201);
+
+    expect(invite.body.code).toEqual(expect.any(String));
+
+    const preview = await request(app.getHttpServer())
+      .get(`/api/groups/invites/${invite.body.code}`)
+      .set('Authorization', `Bearer ${bob.token}`)
+      .expect(200);
+    expect(preview.body.group.conversationId).toBe(group.body.id);
+    expect(preview.body.group.memberCount).toBe(1);
+
+    const joined = await request(app.getHttpServer())
+      .post(`/api/groups/invites/${invite.body.code}/join`)
+      .set('Authorization', `Bearer ${bob.token}`)
+      .expect(201);
+    expect(joined.body.id).toBe(group.body.id);
+    expect(joined.body.memberCount).toBe(2);
+
+    const links = await request(app.getHttpServer())
+      .get(`/api/groups/${group.body.id}/invites`)
+      .set('Authorization', `Bearer ${alice.token}`)
+      .expect(200);
+    expect(links.body[0].usedCount).toBe(1);
+  });
+
+  it('supports channel discovery and blocks subscriber posting', async () => {
+    const owner = await register('channel_owner', 0);
+    const subscriber = await register('channel_subscriber', 1);
+
+    const channel = await request(app.getHttpServer())
+      .post('/api/channels')
+      .set('Authorization', `Bearer ${owner.token}`)
+      .send({
+        name: `E2E Channel ${runId}`,
+        description: 'channel discovery coverage',
+      })
+      .expect(201);
+
+    expect(channel.body.type).toBe('channel');
+    expect(channel.body.role).toBe('owner');
+
+    const discover = await request(app.getHttpServer())
+      .get('/api/channels/discover')
+      .query({ q: `E2E Channel ${runId}` })
+      .set('Authorization', `Bearer ${subscriber.token}`)
+      .expect(200);
+    expect(discover.body[0]).toMatchObject({
+      conversationId: channel.body.id,
+      isSubscribed: false,
+    });
+
+    const subscribed = await request(app.getHttpServer())
+      .post(`/api/channels/${channel.body.id}/subscribe`)
+      .set('Authorization', `Bearer ${subscriber.token}`)
+      .expect(201);
+    expect(subscribed.body.role).toBe('subscriber');
+
+    await request(app.getHttpServer())
+      .post('/api/messages')
+      .set('Authorization', `Bearer ${subscriber.token}`)
+      .send({
+        conversationId: channel.body.id,
+        content: 'subscriber should not publish',
+        clientId: `channel-denied-${runId}`,
+      })
+      .expect(403);
+
+    const ownerMessage = await request(app.getHttpServer())
+      .post('/api/messages')
+      .set('Authorization', `Bearer ${owner.token}`)
+      .send({
+        conversationId: channel.body.id,
+        content: 'owner channel post',
+        clientId: `channel-owner-${runId}`,
+      })
+      .expect(201);
+    expect(ownerMessage.body.content).toBe('owner channel post');
+  });
+
+  it('enforces search visibility and direct-message privacy settings', async () => {
+    const alice = await register('privacy_alice', 0);
+    const bob = await register('privacy_bob', 1);
+
+    await request(app.getHttpServer())
+      .patch('/api/users/me')
+      .set('Authorization', `Bearer ${bob.token}`)
+      .send({ searchable: false, allowDirectMessages: false })
+      .expect(200);
+
+    const hiddenSearch = await request(app.getHttpServer())
+      .get('/api/users/search')
+      .query({ q: bob.username })
+      .set('Authorization', `Bearer ${alice.token}`)
+      .expect(200);
+    expect(hiddenSearch.body.map((user: any) => user.id)).not.toContain(bob.id);
+
+    await request(app.getHttpServer())
+      .post('/api/conversations/direct')
+      .set('Authorization', `Bearer ${alice.token}`)
+      .send({ userId: bob.id })
+      .expect(403);
+
+    await request(app.getHttpServer())
+      .post('/api/users/contacts')
+      .set('Authorization', `Bearer ${bob.token}`)
+      .send({ userId: alice.id })
+      .expect(201);
+
+    const direct = await request(app.getHttpServer())
+      .post('/api/conversations/direct')
+      .set('Authorization', `Bearer ${alice.token}`)
+      .send({ userId: bob.id })
+      .expect(201);
+    expect(direct.body.type).toBe('direct');
+    expect(direct.body.user.id).toBe(bob.id);
   });
 });
