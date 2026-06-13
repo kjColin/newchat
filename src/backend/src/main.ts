@@ -3,21 +3,18 @@ import { ValidationPipe } from '@nestjs/common';
 import express from 'express';
 import { join } from 'path';
 import { AppModule } from './app.module';
+import { getCorsOrigins, getHost, getPort, validateRuntimeConfig } from './common/config';
 import { GlobalExceptionFilter } from './common/http-exception.filter';
 
 async function bootstrap() {
+  validateRuntimeConfig();
   const app = await NestFactory.create(AppModule);
   app.getHttpAdapter().getInstance().set('trust proxy', 2);
   app.use('/uploads', express.static(join(process.cwd(), 'uploads')));
   app.setGlobalPrefix('api');
 
   app.enableCors({
-    origin: [
-      'http://localhost:5173',
-      'http://localhost:4173',
-      'http://localhost:3001',
-      'https://newchat.clnkj.de',
-    ],
+    origin: getCorsOrigins(),
     credentials: true,
   });
 
@@ -68,8 +65,8 @@ async function bootstrap() {
     next();
   });
 
-  const port = process.env.PORT || 3000;
-  const host = process.env.HOST || '127.0.0.1';
+  const port = getPort();
+  const host = getHost();
   await app.listen(port, host);
   console.log(`Server running on http://${host}:${port}`);
 }

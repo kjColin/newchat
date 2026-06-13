@@ -10,16 +10,11 @@ import {
 import { JwtService } from '@nestjs/jwt';
 import { Server, Socket } from 'socket.io';
 import { PrismaService } from '../prisma/prisma.service';
-import { getJwtSecret } from '../common/config';
+import { getCorsOrigins, getJwtSecret } from '../common/config';
 
 @WebSocketGateway({
   cors: {
-    origin: [
-      'http://localhost:5173',
-      'http://localhost:4173',
-      'http://localhost:3001',
-      'https://newchat.clnkj.de',
-    ],
+    origin: getCorsOrigins(),
     credentials: true,
   },
 })

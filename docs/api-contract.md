@@ -790,6 +790,8 @@
 const socket = io('/', { auth: { token: '<jwt>' } })
 ```
 
+HTTP API 和 Socket API 共用 `CORS_ORIGINS` 作为来源白名单；生产环境未配置时后端会拒绝启动。
+
 ### 加入会话房间
 ```js
 socket.emit('joinConversation', { conversationId: 'uuid' })

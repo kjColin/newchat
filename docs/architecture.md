@@ -457,6 +457,20 @@ Data
 
 前端生产环境建议使用静态文件服务，不建议长期使用 `vite preview` 作为正式服务。
 
+### 12.3 关键环境变量
+
+后端启动会校验关键运行配置。生产环境必须显式配置：
+
+| 变量 | 说明 |
+| --- | --- |
+| `DATABASE_URL` | PostgreSQL 连接串 |
+| `JWT_SECRET` | JWT 签名密钥，生产环境不得使用默认值 |
+| `CORS_ORIGINS` | 允许访问 HTTP 和 Socket API 的前端源，多个源用英文逗号分隔 |
+| `HOST` / `PORT` | 后端监听地址和端口 |
+| `NOTIFICATION_RETENTION_DAYS` | 通知保留天数 |
+| `NOTIFICATION_MAX_PER_USER` | 每个用户最多保留通知数量 |
+| `NOTIFICATION_CLEANUP_INTERVAL_MINUTES` | 通知后台清理周期 |
+
 ## 13. 演进路线
 
 ### P0：工程与稳定性
@@ -493,7 +507,7 @@ Data
 
 - `newchat` 目录与实际运行目录不一致，容易导致部署和维护误操作。
 - `.env`、`dist`、`node_modules`、备份文件出现在工作区，版本管理边界不清。
-- JWT 默认 secret 为 `secret`，生产环境存在安全风险。
+- 生产环境已强制校验 `JWT_SECRET` 和 `CORS_ORIGINS`；部署时必须提供真实密钥和前端域名。
 - 自动化测试覆盖不足，当前主要依赖构建和手工验证。
 - 站内通知已持久化并支持保留策略；Web Push 仍待生产化。
 - `Chat.tsx` 状态过多，继续加功能会难以维护。
@@ -502,7 +516,7 @@ Data
 
 优先顺序：
 
-1. 清理工程边界和配置安全。
+1. 清理工程边界，统一 `newchat` 与 `chat-app` 的部署目录关系。
 2. 扩展 e2e 覆盖：文件消息、邀请入群、频道、隐私设置。
 3. 将 `Chat.tsx` 拆为会话、消息、详情、Socket 等 hooks。
 4. 扩展 Web Push。
