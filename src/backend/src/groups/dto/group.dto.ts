@@ -21,6 +21,11 @@ export class UpdateGroupDto {
   @IsOptional()
   @IsString()
   avatar?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(1000)
+  announcement?: string;
 }
 
 export class AddGroupMembersDto {

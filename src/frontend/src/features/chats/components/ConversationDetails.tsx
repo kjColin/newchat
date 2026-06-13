@@ -18,6 +18,7 @@ type ConversationDetailsProps = {
   memberSearch: string;
   memberSearchResults: SearchUser[];
   groupNameDraft: string;
+  announcementDraft: string;
   inviteLinks: InviteLink[];
   inviteLinkBaseUrl: string;
   inviteLoading: boolean;
@@ -30,7 +31,9 @@ type ConversationDetailsProps = {
   onClose: () => void;
   onMemberSearchChange: (value: string) => void;
   onGroupNameDraftChange: (value: string) => void;
+  onAnnouncementDraftChange: (value: string) => void;
   onSaveGroupName: () => void;
+  onSaveAnnouncement: () => void;
   onAddMember: (user: SearchUser) => void;
   onRemoveMember: (userId: string) => void;
   onCreateInviteLink: () => void;
@@ -46,6 +49,7 @@ export function ConversationDetails({
   memberSearch,
   memberSearchResults,
   groupNameDraft,
+  announcementDraft,
   inviteLinks,
   inviteLinkBaseUrl,
   inviteLoading,
@@ -58,7 +62,9 @@ export function ConversationDetails({
   onClose,
   onMemberSearchChange,
   onGroupNameDraftChange,
+  onAnnouncementDraftChange,
   onSaveGroupName,
+  onSaveAnnouncement,
   onAddMember,
   onRemoveMember,
   onCreateInviteLink,
@@ -132,6 +138,26 @@ export function ConversationDetails({
               <input value={groupNameDraft} onChange={event => onGroupNameDraftChange(event.target.value)} />
               <button type="button" onClick={onSaveGroupName}>Save</button>
             </div>
+          </div>
+        )}
+
+        {isGroup && (
+          <div className="details-section">
+            <label>Announcement</label>
+            {canManage ? (
+              <>
+                <textarea
+                  className="details-textarea"
+                  value={announcementDraft}
+                  onChange={event => onAnnouncementDraftChange(event.target.value)}
+                  maxLength={1000}
+                  placeholder="Group announcement"
+                />
+                <button className="solid-button" type="button" onClick={onSaveAnnouncement}>Save</button>
+              </>
+            ) : (
+              <div className="announcement-card">{conversation.announcement || 'No announcement'}</div>
+            )}
           </div>
         )}
 

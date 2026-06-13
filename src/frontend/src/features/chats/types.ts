@@ -84,6 +84,7 @@ export type Conversation = {
   type: 'direct' | 'group';
   name: string;
   avatar?: string | null;
+  announcement?: string | null;
   memberCount: number;
   role?: string;
   lastMessage?: Message | null;

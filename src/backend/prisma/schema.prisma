@@ -124,6 +124,7 @@ model Group {
   id             String   @id @default(uuid())
   name           String
   avatar         String?
+  announcement   String?
   ownerId        String
   conversationId String   @unique
   createdAt      DateTime @default(now())

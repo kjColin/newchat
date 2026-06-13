@@ -132,7 +132,7 @@ export async function updateConversationSettings(
   return data;
 }
 
-export async function updateGroup(conversationId: string, payload: { name?: string; avatar?: string }) {
+export async function updateGroup(conversationId: string, payload: { name?: string; avatar?: string; announcement?: string }) {
   const { data } = await apiClient.patch<Conversation>(`/groups/${conversationId}`, payload);
   return data;
 }

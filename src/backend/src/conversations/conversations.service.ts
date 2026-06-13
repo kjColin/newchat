@@ -131,6 +131,7 @@ export class ConversationsService {
       type: 'group',
       name: group.name,
       avatar: group.avatar,
+      announcement: group.announcement,
       role: 'member',
       memberCount,
       lastMessage: conversation.messages?.[0] || null,

@@ -377,6 +377,20 @@
 ### PATCH /api/groups/:conversationId
 更新群资料，要求当前用户为 owner 或 admin。
 
+**Request**
+```json
+{
+  "name": "string",
+  "avatar": "url",
+  "announcement": "string"
+}
+```
+
+`announcement` 为空字符串时会清空公告，最长 1000 字符。
+
+**Response** (200)
+返回更新后的 group conversation 对象，包含 `announcement` 字段。
+
 ### GET /api/groups/:conversationId/members
 获取群成员列表。
 

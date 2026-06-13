@@ -51,9 +51,10 @@ export class GroupsService {
     });
   }
 
-  async updateGroup(conversationId: string, userId: string, data: { name?: string; avatar?: string }) {
+  async updateGroup(conversationId: string, userId: string, data: { name?: string; avatar?: string; announcement?: string }) {
     const group = await this.getManageableGroup(conversationId, userId);
     const name = data.name?.trim();
+    const announcement = data.announcement?.trim();
     if (name !== undefined && name.length === 0) throw new BadRequestException('Group name is required');
 
     const updated = await this.prisma.group.update({
@@ -61,6 +62,7 @@ export class GroupsService {
       data: {
         name: name || undefined,
         avatar: data.avatar,
+        announcement: data.announcement === undefined ? undefined : announcement || null,
         conversation: name ? { update: { name } } : undefined,
       },
       include: {

@@ -156,6 +156,7 @@ export function ChatPage() {
   const [memberSearch, setMemberSearch] = useState('');
   const [memberSearchResults, setMemberSearchResults] = useState<SearchUser[]>([]);
   const [groupNameDraft, setGroupNameDraft] = useState('');
+  const [announcementDraft, setAnnouncementDraft] = useState('');
   const [inviteLinks, setInviteLinks] = useState<InviteLink[]>([]);
   const [inviteLoading, setInviteLoading] = useState(false);
   const [inviteInput, setInviteInput] = useState('');
@@ -170,6 +171,7 @@ export function ChatPage() {
   const selectConversation = useCallback(async (conversation: Conversation) => {
     setActiveConversation(conversation);
     setGroupNameDraft(conversation.name);
+    setAnnouncementDraft(conversation.announcement || '');
     setReplyToMessage(null);
     setPendingAttachments([]);
     setMessageSearch('');
@@ -757,6 +759,7 @@ export function ChatPage() {
     setMediaAttachments([]);
     setFileAttachments([]);
     setGroupNameDraft(activeConversation.name);
+    setAnnouncementDraft(activeConversation.announcement || '');
     setMemberSearch('');
     setMemberSearchResults([]);
 
@@ -844,6 +847,18 @@ export function ChatPage() {
     }
   };
 
+  const saveAnnouncement = async () => {
+    if (!activeConversation || activeConversation.type !== 'group') return;
+    try {
+      const updated = await updateGroup(activeConversation.id, { announcement: announcementDraft });
+      setActiveConversation(prev => prev && prev.id === updated.id ? { ...prev, ...updated } : prev);
+      setConversations(prev => prev.map(conversation => conversation.id === updated.id ? { ...conversation, ...updated } : conversation));
+      setDetailsNotice('Announcement saved');
+    } catch (error: any) {
+      setDetailsError(error.response?.data?.message || 'Could not update announcement');
+    }
+  };
+
   const addMember = async (user: SearchUser) => {
     if (!activeConversation) return;
     try {
@@ -911,6 +926,12 @@ export function ChatPage() {
               onBack={() => setMobileConversationOpen(false)}
               onOpenDetails={openDetails}
             />
+            {activeConversation.type === 'group' && activeConversation.announcement && (
+              <div className="announcement-bar">
+                <strong>Announcement</strong>
+                <span>{activeConversation.announcement}</span>
+              </div>
+            )}
             {pinnedMessages[0] && (
               <div className="pinned-message-bar">
                 <button type="button" onClick={() => jumpToPinnedMessage(pinnedMessages[0])}>
@@ -1029,6 +1050,7 @@ export function ChatPage() {
         memberSearch={memberSearch}
         memberSearchResults={memberSearchResults}
         groupNameDraft={groupNameDraft}
+        announcementDraft={announcementDraft}
         inviteLinks={inviteLinks}
         inviteLinkBaseUrl={`${window.location.origin}/chat?invite=`}
         inviteLoading={inviteLoading}
@@ -1041,7 +1063,9 @@ export function ChatPage() {
         onClose={() => setDetailsOpen(false)}
         onMemberSearchChange={setMemberSearch}
         onGroupNameDraftChange={setGroupNameDraft}
+        onAnnouncementDraftChange={setAnnouncementDraft}
         onSaveGroupName={saveGroupName}
+        onSaveAnnouncement={saveAnnouncement}
         onAddMember={addMember}
         onRemoveMember={removeMember}
         onCreateInviteLink={createInviteLink}
