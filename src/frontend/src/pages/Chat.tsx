@@ -7,8 +7,6 @@ import {
   createChannel,
   createDirectConversation,
   createGroup,
-  discoverChannels,
-  discoverGroups,
   getPinnedMessages,
   joinGroupByInvite,
   joinPublicGroup,
@@ -38,11 +36,11 @@ import {
   getContacts,
   getCurrentUser,
   removeContact,
-  searchUsers,
   unblockUser,
   updateCurrentUser,
 } from '../features/users/api';
 import type { BlockedUserEntry, ContactEntry, SearchUser } from '../features/users/types';
+import { useUserSearch } from '../features/users/useUserSearch';
 import { NotificationMenu } from '../features/notifications/components/NotificationMenu';
 import { useNotifications } from '../features/notifications/useNotifications';
 import './Chat.css';
@@ -94,19 +92,12 @@ export function ChatPage() {
   const [pendingAttachments, setPendingAttachments] = useState<Attachment[]>([]);
   const [pinnedMessages, setPinnedMessages] = useState<PinnedMessage[]>([]);
   const [pinLoading, setPinLoading] = useState(false);
-  const [search, setSearch] = useState('');
-  const [searchResults, setSearchResults] = useState<SearchUser[]>([]);
-  const [groupResults, setGroupResults] = useState<GroupDiscoveryItem[]>([]);
-  const [channelResults, setChannelResults] = useState<ChannelDiscoveryItem[]>([]);
-  const [discoveryActionLoading, setDiscoveryActionLoading] = useState('');
   const [contacts, setContacts] = useState<ContactEntry[]>([]);
   const [blockedUsers, setBlockedUsers] = useState<BlockedUserEntry[]>([]);
   const [mobileConversationOpen, setMobileConversationOpen] = useState(false);
   const [createGroupOpen, setCreateGroupOpen] = useState(false);
   const [createChannelOpen, setCreateChannelOpen] = useState(false);
   const [groupName, setGroupName] = useState('');
-  const [groupSearch, setGroupSearch] = useState('');
-  const [groupSearchResults, setGroupSearchResults] = useState<SearchUser[]>([]);
   const [selectedMembers, setSelectedMembers] = useState<SearchUser[]>([]);
   const [createError, setCreateError] = useState('');
   const [creatingGroup, setCreatingGroup] = useState(false);
@@ -131,6 +122,28 @@ export function ChatPage() {
   const messageListRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const selectConversationRef = useRef<(conversation: Conversation) => Promise<void>>();
+  const {
+    search,
+    searchResults,
+    groupResults,
+    channelResults,
+    discoveryActionLoading,
+    groupSearch,
+    groupSearchResults,
+    memberSearch,
+    memberSearchResults,
+    setSearch,
+    setDiscoveryActionLoading,
+    setGroupSearch,
+    setMemberSearch,
+    setMemberSearchResults,
+    clearSidebarSearch,
+    clearGroupSearch,
+    patchSearchUser,
+    markChannelSubscribed,
+    markChannelUnsubscribed,
+    markGroupJoined,
+  } = useUserSearch();
   const {
     conversations,
     activeConversation,
@@ -164,14 +177,10 @@ export function ChatPage() {
     linkPreviews,
     linkFilter,
     attachmentsLoading,
-    memberSearch,
-    memberSearchResults,
     groupNameDraft,
     announcementDraft,
     inviteLinks,
     inviteLoading,
-    setMemberSearch,
-    setMemberSearchResults,
     setGroupNameDraft,
     setAnnouncementDraft,
     openDetails,
@@ -264,11 +273,6 @@ export function ChatPage() {
     activeConversation?.type === 'channel' &&
     !['owner', 'admin'].includes(activeConversation.role || ''),
   );
-  const syncSearchUser = useCallback((userId: string, updates: Partial<SearchUser>) => {
-    setSearchResults(prev => prev.map(user => user.id === userId ? { ...user, ...updates } : user));
-    setGroupSearchResults(prev => prev.map(user => user.id === userId ? { ...user, ...updates } : user));
-    setMemberSearchResults(prev => prev.map(user => user.id === userId ? { ...user, ...updates } : user));
-  }, []);
 
   const selectConversation = useCallback(async (conversation: Conversation) => {
     setActiveConversation(conversation);
@@ -456,59 +460,6 @@ export function ChatPage() {
   }, [joinInviteCode]);
 
   useEffect(() => {
-    const timer = window.setTimeout(async () => {
-      try {
-        const query = search.trim();
-        if (!query) {
-          setSearchResults([]);
-          setGroupResults([]);
-          setChannelResults([]);
-          return;
-        }
-
-        const [nextUsers, nextGroups, nextChannels] = await Promise.all([
-          searchUsers(query),
-          discoverGroups(query),
-          discoverChannels(query),
-        ]);
-        setSearchResults(nextUsers);
-        setGroupResults(nextGroups);
-        setChannelResults(nextChannels);
-      } catch {
-        setSearchResults([]);
-        setGroupResults([]);
-        setChannelResults([]);
-      }
-    }, 250);
-
-    return () => window.clearTimeout(timer);
-  }, [search]);
-
-  useEffect(() => {
-    const timer = window.setTimeout(async () => {
-      try {
-        setGroupSearchResults(await searchUsers(groupSearch));
-      } catch {
-        setGroupSearchResults([]);
-      }
-    }, 250);
-
-    return () => window.clearTimeout(timer);
-  }, [groupSearch]);
-
-  useEffect(() => {
-    const timer = window.setTimeout(async () => {
-      try {
-        setMemberSearchResults(await searchUsers(memberSearch));
-      } catch {
-        setMemberSearchResults([]);
-      }
-    }, 250);
-
-    return () => window.clearTimeout(timer);
-  }, [memberSearch]);
-
-  useEffect(() => {
     if (!loadingEarlier && isNearBottom(messageListRef.current)) {
       bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
     }
@@ -652,8 +603,7 @@ export function ChatPage() {
     try {
       const conversation = await createDirectConversation(user.id);
       upsertConversation(conversation);
-      setSearch('');
-      setSearchResults([]);
+      clearSidebarSearch();
       await selectConversation(conversation);
     } catch (error: any) {
       setSidebarError(error.response?.data?.message || 'Could not start chat');
@@ -665,7 +615,7 @@ export function ChatPage() {
     try {
       const nextContacts = await addContact(user.id);
       setContacts(nextContacts);
-      syncSearchUser(user.id, { isContact: true, isBlocked: false });
+      patchSearchUser(user.id, { isContact: true, isBlocked: false });
     } catch (error: any) {
       setSidebarError(error.response?.data?.message || 'Could not add contact');
     }
@@ -676,7 +626,7 @@ export function ChatPage() {
     try {
       const nextContacts = await removeContact(user.id);
       setContacts(nextContacts);
-      syncSearchUser(user.id, { isContact: false });
+      patchSearchUser(user.id, { isContact: false });
     } catch (error: any) {
       setSidebarError(error.response?.data?.message || 'Could not remove contact');
     }
@@ -691,7 +641,7 @@ export function ChatPage() {
       ]);
       setBlockedUsers(nextBlocked);
       setContacts(nextContacts);
-      syncSearchUser(user.id, { isContact: false, isBlocked: true });
+      patchSearchUser(user.id, { isContact: false, isBlocked: true });
       applyDirectUserUpdate(user.id, { isContact: false, isBlocked: true });
     } catch (error: any) {
       setSidebarError(error.response?.data?.message || 'Could not block user');
@@ -703,7 +653,7 @@ export function ChatPage() {
     try {
       const nextBlocked = await unblockUser(user.id);
       setBlockedUsers(nextBlocked);
-      syncSearchUser(user.id, { isBlocked: false });
+      patchSearchUser(user.id, { isBlocked: false });
       applyDirectUserUpdate(user.id, { isBlocked: false });
     } catch (error: any) {
       setSidebarError(error.response?.data?.message || 'Could not unblock user');
@@ -726,8 +676,7 @@ export function ChatPage() {
       upsertConversation(conversation);
       setCreateGroupOpen(false);
       setGroupName('');
-      setGroupSearch('');
-      setGroupSearchResults([]);
+      clearGroupSearch();
       setSelectedMembers([]);
       await selectConversation(conversation);
     } catch (error: any) {
@@ -760,11 +709,7 @@ export function ChatPage() {
     try {
       const conversation = await subscribeChannel(channel.conversationId);
       upsertConversation(conversation);
-      setChannelResults(prev => prev.map(item =>
-        item.conversationId === channel.conversationId
-          ? { ...item, isSubscribed: true, role: conversation.role as ChannelDiscoveryItem['role'], memberCount: conversation.memberCount }
-          : item
-      ));
+      markChannelSubscribed(channel, conversation.role as ChannelDiscoveryItem['role'], conversation.memberCount);
       await selectConversation(conversation);
     } catch (error: any) {
       setSidebarError(error.response?.data?.message || 'Could not subscribe to channel');
@@ -779,11 +724,7 @@ export function ChatPage() {
     try {
       await unsubscribeChannel(channel.conversationId);
       removeConversation(channel.conversationId);
-      setChannelResults(prev => prev.map(item =>
-        item.conversationId === channel.conversationId
-          ? { ...item, isSubscribed: false, role: null, memberCount: Math.max(0, item.memberCount - 1) }
-          : item
-      ));
+      markChannelUnsubscribed(channel);
       if (activeConversation?.id === channel.conversationId) {
         setActiveConversation(null);
         resetMessages();
@@ -802,11 +743,7 @@ export function ChatPage() {
     try {
       const conversation = await joinPublicGroup(group.conversationId);
       upsertConversation(conversation);
-      setGroupResults(prev => prev.map(item =>
-        item.conversationId === group.conversationId
-          ? { ...item, isJoined: true, role: conversation.role as GroupDiscoveryItem['role'], memberCount: conversation.memberCount }
-          : item
-      ));
+      markGroupJoined(group, conversation.role as GroupDiscoveryItem['role'], conversation.memberCount);
       await selectConversation(conversation);
     } catch (error: any) {
       setSidebarError(error.response?.data?.message || 'Could not join group');
