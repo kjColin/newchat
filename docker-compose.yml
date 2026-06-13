@@ -30,6 +30,7 @@ services:
       NOTIFICATION_RETENTION_DAYS: 30
       NOTIFICATION_MAX_PER_USER: 100
       NOTIFICATION_CLEANUP_INTERVAL_MINUTES: 60
+      PRESENCE_OFFLINE_DELAY_MS: 15000
     depends_on:
       - postgres
       - redis

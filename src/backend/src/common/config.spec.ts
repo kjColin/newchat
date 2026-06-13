@@ -2,6 +2,7 @@ import {
   getCorsOrigins,
   getJwtSecret,
   getNotificationRetentionDays,
+  getPresenceOfflineDelayMs,
   getPort,
   validateRuntimeConfig,
 } from './config';
@@ -17,6 +18,7 @@ describe('runtime config', () => {
     delete process.env.CORS_ORIGINS;
     delete process.env.PORT;
     delete process.env.NOTIFICATION_RETENTION_DAYS;
+    delete process.env.PRESENCE_OFFLINE_DELAY_MS;
   });
 
   afterAll(() => {
@@ -27,6 +29,7 @@ describe('runtime config', () => {
     expect(getJwtSecret()).toBe('dev-secret-change-me');
     expect(getCorsOrigins()).toContain('http://localhost:5173');
     expect(getPort()).toBe(3000);
+    expect(getPresenceOfflineDelayMs()).toBe(15000);
   });
 
   it('requires production secrets and CORS origins', () => {
@@ -46,11 +49,13 @@ describe('runtime config', () => {
     process.env.CORS_ORIGINS = 'https://app.example.com, https://admin.example.com';
     process.env.PORT = '3101';
     process.env.NOTIFICATION_RETENTION_DAYS = '14';
+    process.env.PRESENCE_OFFLINE_DELAY_MS = '250';
 
     expect(validateRuntimeConfig()).toBeUndefined();
     expect(getCorsOrigins()).toEqual(['https://app.example.com', 'https://admin.example.com']);
     expect(getPort()).toBe(3101);
     expect(getNotificationRetentionDays()).toBe(14);
+    expect(getPresenceOfflineDelayMs()).toBe(250);
   });
 
   it('rejects non-integer numeric environment values', () => {

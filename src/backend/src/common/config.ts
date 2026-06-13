@@ -57,6 +57,10 @@ export function getNotificationCleanupIntervalMs() {
   return minutes * 60 * 1000;
 }
 
+export function getPresenceOfflineDelayMs() {
+  return getPositiveIntegerEnv('PRESENCE_OFFLINE_DELAY_MS', 15000);
+}
+
 export function getHost() {
   return process.env.HOST?.trim() || '127.0.0.1';
 }
@@ -91,4 +95,5 @@ export function validateRuntimeConfig() {
   getNotificationRetentionDays();
   getNotificationMaxPerUser();
   getNotificationCleanupIntervalMs();
+  getPresenceOfflineDelayMs();
 }

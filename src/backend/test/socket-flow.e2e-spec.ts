@@ -6,6 +6,8 @@ import request = require('supertest');
 import { AppModule } from '../src/app.module';
 import { PrismaService } from '../src/prisma/prisma.service';
 
+process.env.PRESENCE_OFFLINE_DELAY_MS = '100';
+
 type TestUser = {
   id: string;
   username: string;
@@ -26,6 +28,30 @@ function waitForEvent<T>(socket: Socket, event: string, timeoutMs = 3000): Promi
     }
 
     socket.once(event, onEvent);
+  });
+}
+
+function waitForMatchingEvent<T>(
+  socket: Socket,
+  event: string,
+  predicate: (payload: T) => boolean,
+  timeoutMs = 3000,
+): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      socket.off(event, onEvent);
+      reject(new Error(`Timed out waiting for matching ${event}`));
+    }, timeoutMs);
+
+    function onEvent(payload: T) {
+      if (!predicate(payload)) return;
+
+      clearTimeout(timer);
+      socket.off(event, onEvent);
+      resolve(payload);
+    }
+
+    socket.on(event, onEvent);
   });
 }
 
@@ -209,5 +235,49 @@ describe('Socket flow (e2e)', () => {
     sockets.push(socket);
 
     await expect(waitForEvent(socket, 'disconnect')).resolves.toBe('io server disconnect');
+  });
+
+  it('keeps users online until their last device disconnects', async () => {
+    const alice = await register('presence_alice', 0);
+    const observer = await register('presence_observer', 1);
+    const observerSocket = await connectAndWait(observer);
+
+    const firstOnlinePromise = waitForMatchingEvent<any>(
+      observerSocket,
+      'presence:update',
+      payload => payload.userId === alice.id && payload.status === 'online',
+    );
+    const firstDevice = await connectAndWait(alice);
+    await expect(firstOnlinePromise).resolves.toMatchObject({
+      userId: alice.id,
+      status: 'online',
+    });
+
+    const secondDevice = await connectAndWait(alice);
+    secondDevice.disconnect();
+    await new Promise(resolve => setTimeout(resolve, 200));
+
+    const stillOnline = await prisma.user.findUnique({
+      where: { id: alice.id },
+      select: { status: true },
+    });
+    expect(stillOnline?.status).toBe('online');
+
+    const offlinePromise = waitForMatchingEvent<any>(
+      observerSocket,
+      'presence:update',
+      payload => payload.userId === alice.id && payload.status === 'offline',
+    );
+    firstDevice.disconnect();
+    await expect(offlinePromise).resolves.toMatchObject({
+      userId: alice.id,
+      status: 'offline',
+    });
+
+    const offline = await prisma.user.findUnique({
+      where: { id: alice.id },
+      select: { status: true },
+    });
+    expect(offline?.status).toBe('offline');
   });
 });

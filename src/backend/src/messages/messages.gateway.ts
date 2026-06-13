@@ -11,7 +11,7 @@ import {
 import { JwtService } from '@nestjs/jwt';
 import { Server, Socket } from 'socket.io';
 import { PrismaService } from '../prisma/prisma.service';
-import { getCorsOrigins, getJwtSecret } from '../common/config';
+import { getCorsOrigins, getJwtSecret, getPresenceOfflineDelayMs } from '../common/config';
 
 @WebSocketGateway({
   cors: {
@@ -23,6 +23,7 @@ export class MessagesGateway implements OnGatewayConnection, OnGatewayDisconnect
   @WebSocketServer()
   server: Server;
 
+  private readonly offlineDelayMs = getPresenceOfflineDelayMs();
   private readonly activeSocketsByUser = new Map<string, Set<string>>();
   private readonly offlineTimers = new Map<string, NodeJS.Timeout>();
 
@@ -218,7 +219,7 @@ export class MessagesGateway implements OnGatewayConnection, OnGatewayDisconnect
         lastSeen: lastSeen.toISOString(),
       });
       this.offlineTimers.delete(userId);
-    }, 15000);
+    }, this.offlineDelayMs);
     timer.unref?.();
 
     this.offlineTimers.set(userId, timer);

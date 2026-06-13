@@ -818,6 +818,8 @@ socket.emit('typing:stop', { conversationId: 'uuid' })
 
 前端基于 `notification` 事件维护站内通知列表，并基于 `message` 事件触发浏览器通知：仅当消息来自其他用户且不属于当前打开会话时提醒；点击通知会切换到对应会话并标记该通知已读。
 
+`presence:update` 由服务端多设备连接计数驱动：任意设备在线时用户保持 `online`，最后一个 Socket 断开后按 `PRESENCE_OFFLINE_DELAY_MS` 延迟广播 `offline`。
+
 ---
 
 **Version**: 1.0
