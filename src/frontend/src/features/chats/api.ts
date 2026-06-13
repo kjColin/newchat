@@ -9,6 +9,8 @@ import type {
   Message,
   MessageSearchResponse,
   MessagesResponse,
+  PinnedMessage,
+  PinnedMessagesResponse,
 } from './types';
 
 export async function getConversations() {
@@ -84,6 +86,21 @@ export async function getConversationAttachments(
   const { data } = await apiClient.get<AttachmentsResponse>(`/messages/${conversationId}/attachments`, {
     params: options,
   });
+  return data;
+}
+
+export async function getPinnedMessages(conversationId: string) {
+  const { data } = await apiClient.get<PinnedMessage[]>(`/messages/${conversationId}/pinned`);
+  return data;
+}
+
+export async function pinMessage(messageId: string) {
+  const { data } = await apiClient.post<PinnedMessagesResponse>(`/messages/${messageId}/pin`);
+  return data;
+}
+
+export async function unpinMessage(conversationId: string, messageId: string) {
+  const { data } = await apiClient.delete<PinnedMessagesResponse>(`/messages/${conversationId}/pinned/${messageId}`);
   return data;
 }
 

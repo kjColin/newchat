@@ -277,6 +277,52 @@
 }
 ```
 
+### GET /api/messages/:conversationId/pinned
+获取当前会话置顶消息列表。
+
+**Response** (200)
+```json
+[
+  {
+    "conversationId": "uuid",
+    "messageId": "uuid",
+    "pinnedById": "uuid",
+    "pinnedAt": "timestamp",
+    "pinnedBy": {
+      "id": "uuid",
+      "username": "string",
+      "avatar": null
+    },
+    "message": {
+      "id": "uuid",
+      "conversationId": "uuid",
+      "content": "string",
+      "sender": {}
+    }
+  }
+]
+```
+
+### POST /api/messages/:messageId/pin
+置顶一条可访问且未删除的消息。单聊成员可置顶；群聊要求当前用户为 owner 或 admin。
+
+**Response** (201)
+```json
+{
+  "pinnedMessages": []
+}
+```
+
+### DELETE /api/messages/:conversationId/pinned/:messageId
+取消置顶消息。权限要求同置顶接口。
+
+**Response** (200)
+```json
+{
+  "pinnedMessages": []
+}
+```
+
 ### POST /api/messages/:messageId/forward
 将一条可访问、未删除的消息转发到目标会话。
 

@@ -44,6 +44,25 @@ export class MessagesController {
     });
   }
 
+  @Get(':conversationId/pinned')
+  async listPinned(@Request() req: any, @Param('conversationId') conversationId: string) {
+    return this.messagesService.listPinned(conversationId, req.user.userId);
+  }
+
+  @Post(':messageId/pin')
+  async pinMessage(@Request() req: any, @Param('messageId') messageId: string) {
+    return this.messagesService.pinMessage(messageId, req.user.userId);
+  }
+
+  @Delete(':conversationId/pinned/:messageId')
+  async unpinMessage(
+    @Request() req: any,
+    @Param('conversationId') conversationId: string,
+    @Param('messageId') messageId: string,
+  ) {
+    return this.messagesService.unpinMessage(conversationId, messageId, req.user.userId);
+  }
+
   @Post(':messageId/forward')
   async forward(@Request() req: any, @Param('messageId') messageId: string, @Body() body: ForwardMessageDto) {
     return this.messagesService.forward(messageId, req.user.userId, body.conversationId, body.clientId);

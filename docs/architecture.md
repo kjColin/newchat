@@ -202,6 +202,7 @@ PostgreSQL
 | `UserConversation` | 用户与会话关系，保存已读、置顶、免打扰、归档 |
 | `Message` | 消息主体，支持文本、编辑、软删除 |
 | `MessageReaction` | 消息表情反应 |
+| `PinnedMessage` | 会话置顶消息、置顶人和置顶时间 |
 | `Group` | 群资料、群主、关联会话 |
 | `GroupMember` | 群成员和角色 |
 | `Attachment` | 文件/图片等附件元数据 |
@@ -216,15 +217,6 @@ model MessageReadReceipt {
   readAt    DateTime @default(now())
 
   @@id([messageId, userId])
-}
-
-model PinnedMessage {
-  conversationId String
-  messageId      String
-  pinnedById     String
-  pinnedAt       DateTime @default(now())
-
-  @@id([conversationId, messageId])
 }
 
 model Contact {
@@ -466,7 +458,7 @@ Data
 - 频道 Channel。
 - 公开群和群目录。
 - 联系人、拉黑、隐私设置。
-- 群公告、置顶消息。
+- 群公告。
 - 链接列表。
 - Bot API 简化版。
 - Redis adapter、消息队列、对象存储。

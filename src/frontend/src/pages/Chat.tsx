@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowDown, MessageCircle } from 'lucide-react';
+import { ArrowDown, MessageCircle, Pin, X } from 'lucide-react';
 import { authStore } from '../features/auth/auth-store';
 import type { User } from '../features/auth/types';
 import {
@@ -16,8 +16,10 @@ import {
   getGroupInviteLinks,
   getGroupMembers,
   getMessages,
+  getPinnedMessages,
   joinGroupByInvite,
   markConversationRead,
+  pinMessage,
   removeGroupMember,
   revokeGroupInviteLink,
   searchMessages,
@@ -25,6 +27,7 @@ import {
   toggleReaction,
   updateConversationSettings,
   updateGroup,
+  unpinMessage,
   uploadFile,
 } from '../features/chats/api';
 import { ChatHeader } from '../features/chats/components/ChatHeader';
@@ -34,7 +37,7 @@ import { MessageComposer } from '../features/chats/components/MessageComposer';
 import { MessageList } from '../features/chats/components/MessageList';
 import { connectChatSocket, joinConversation, startTyping, stopTyping } from '../features/chats/socket';
 import type { ChatSocket } from '../features/chats/socket';
-import type { Attachment, Conversation, GroupMember, InviteLink, Message } from '../features/chats/types';
+import type { Attachment, Conversation, GroupMember, InviteLink, Message, PinnedMessage } from '../features/chats/types';
 import { CreateGroupModal } from '../features/groups/components/CreateGroupModal';
 import { searchUsers } from '../features/users/api';
 import type { SearchUser } from '../features/users/types';
@@ -121,6 +124,8 @@ export function ChatPage() {
   const [loadingMessages, setLoadingMessages] = useState(false);
   const [loadingEarlier, setLoadingEarlier] = useState(false);
   const [hasMoreMessages, setHasMoreMessages] = useState(false);
+  const [pinnedMessages, setPinnedMessages] = useState<PinnedMessage[]>([]);
+  const [pinLoading, setPinLoading] = useState(false);
   const [unreadMarkerId, setUnreadMarkerId] = useState<string | null>(null);
   const [showJumpLatest, setShowJumpLatest] = useState(false);
   const [sending, setSending] = useState(false);
@@ -160,6 +165,7 @@ export function ChatPage() {
   const typingTimer = useRef<number | null>(null);
   const messageListRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const pinnedMessageIds = useMemo(() => new Set(pinnedMessages.map(item => item.messageId)), [pinnedMessages]);
 
   const selectConversation = useCallback(async (conversation: Conversation) => {
     setActiveConversation(conversation);
@@ -169,6 +175,7 @@ export function ChatPage() {
     setMessageSearch('');
     setMessageSearchResults([]);
     setHasMoreMessages(false);
+    setPinnedMessages([]);
     setUnreadMarkerId(null);
     setShowJumpLatest(false);
     setDetailsOpen(false);
@@ -181,6 +188,9 @@ export function ChatPage() {
       const data = await getMessages(conversation.id);
       setMessages(data.messages);
       setHasMoreMessages(data.hasMore);
+      getPinnedMessages(conversation.id)
+        .then(setPinnedMessages)
+        .catch(() => setPinnedMessages([]));
       const marker = conversation.lastReadAt
         ? data.messages.find(message =>
             message.senderId !== currentUser.id &&
@@ -306,6 +316,11 @@ export function ChatPage() {
           ? { ...conversation, unreadCount: 0, lastReadAt: payload.lastReadAt }
           : conversation
       ));
+    });
+    ws.on('message:pinned', payload => {
+      if (activeConversationId.current === payload.conversationId) {
+        setPinnedMessages(payload.pinnedMessages);
+      }
     });
     ws.on('typing', payload => {
       setTypingUsers(prev => {
@@ -513,6 +528,22 @@ export function ChatPage() {
     }
   };
 
+  const handleTogglePin = async (message: Message) => {
+    if (!activeConversation || pinLoading) return;
+    setPinLoading(true);
+    setMessageError('');
+    try {
+      const response = pinnedMessageIds.has(message.id)
+        ? await unpinMessage(activeConversation.id, message.id)
+        : await pinMessage(message.id);
+      setPinnedMessages(response.pinnedMessages);
+    } catch (error: any) {
+      setMessageError(error.response?.data?.message || 'Could not update pinned message');
+    } finally {
+      setPinLoading(false);
+    }
+  };
+
   const handleDelete = async (message: Message) => {
     setMessageError('');
     try {
@@ -615,6 +646,20 @@ export function ChatPage() {
   const jumpToSearchResult = (message: Message) => {
     setMessageSearch('');
     setMessageSearchResults([]);
+    const found = messages.some(item => item.id === message.id);
+    if (!found) {
+      setMessages(prev => [...prev, message].sort((a, b) =>
+        new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+      ));
+    }
+
+    window.setTimeout(() => {
+      document.getElementById(`message-${message.id}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, 50);
+  };
+
+  const jumpToPinnedMessage = (pinned: PinnedMessage) => {
+    const message = pinned.message;
     const found = messages.some(item => item.id === message.id);
     if (!found) {
       setMessages(prev => [...prev, message].sort((a, b) =>
@@ -866,6 +911,26 @@ export function ChatPage() {
               onBack={() => setMobileConversationOpen(false)}
               onOpenDetails={openDetails}
             />
+            {pinnedMessages[0] && (
+              <div className="pinned-message-bar">
+                <button type="button" onClick={() => jumpToPinnedMessage(pinnedMessages[0])}>
+                  <Pin size={16} />
+                  <span>
+                    <strong>{pinnedMessages.length > 1 ? `${pinnedMessages.length} pinned messages` : 'Pinned message'}</strong>
+                    <small>{pinnedMessages[0].message.content || pinnedMessages[0].message.attachments?.[0]?.fileName || 'Attachment'}</small>
+                  </span>
+                </button>
+                <button
+                  className="mini-icon-button"
+                  type="button"
+                  onClick={() => handleTogglePin(pinnedMessages[0].message)}
+                  disabled={pinLoading}
+                  title="Unpin"
+                >
+                  <X size={14} />
+                </button>
+              </div>
+            )}
             <div className="message-search-bar">
               <label className="search-field">
                 <input
@@ -899,6 +964,7 @@ export function ChatPage() {
               unreadMarkerId={unreadMarkerId}
               listRef={messageListRef}
               bottomRef={bottomRef}
+              pinnedMessageIds={pinnedMessageIds}
               onLoadEarlier={loadEarlierMessages}
               onScroll={handleMessageScroll}
               onEdit={handleEdit}
@@ -906,6 +972,7 @@ export function ChatPage() {
               onReact={handleReact}
               onReply={handleReply}
               onForward={handleForward}
+              onTogglePin={handleTogglePin}
             />
             {(showJumpLatest || (activeConversation.unreadCount || 0) > 0) && (
               <button className="jump-latest-button" type="button" onClick={jumpToLatest} title="Jump to latest">

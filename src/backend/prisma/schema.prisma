@@ -23,6 +23,7 @@ model User {
   conversations      UserConversation[]
   reactions          MessageReaction[]
   attachments        Attachment[]
+  pinnedMessages     PinnedMessage[]
   createdInviteLinks InviteLink[]
 }
 
@@ -36,6 +37,7 @@ model Conversation {
   messages     Message[]
   participants UserConversation[]
   group        Group?
+  pinned       PinnedMessage[]
 }
 
 model Message {
@@ -59,6 +61,7 @@ model Message {
   forwards     Message[]         @relation("MessageForwards")
   reactions    MessageReaction[]
   attachments  Attachment[]
+  pinnedIn     PinnedMessage[]
 
   @@unique([senderId, clientId])
   @@index([conversationId, createdAt, id])
@@ -66,6 +69,21 @@ model Message {
   @@index([senderId, createdAt])
   @@index([replyToId])
   @@index([forwardFromId])
+}
+
+model PinnedMessage {
+  conversationId String
+  messageId      String
+  pinnedById     String
+  pinnedAt       DateTime @default(now())
+
+  conversation Conversation @relation(fields: [conversationId], references: [id])
+  message      Message      @relation(fields: [messageId], references: [id])
+  pinnedBy     User         @relation(fields: [pinnedById], references: [id])
+
+  @@id([conversationId, messageId])
+  @@index([conversationId, pinnedAt])
+  @@index([pinnedById])
 }
 
 model Attachment {

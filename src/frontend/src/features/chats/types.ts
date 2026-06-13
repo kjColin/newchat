@@ -110,6 +110,23 @@ export type MessageSearchResponse = {
   messages: Message[];
 };
 
+export type PinnedMessage = {
+  conversationId: string;
+  messageId: string;
+  pinnedById: string;
+  pinnedAt: string;
+  pinnedBy?: {
+    id: string;
+    username: string;
+    avatar?: string | null;
+  };
+  message: Message;
+};
+
+export type PinnedMessagesResponse = {
+  pinnedMessages: PinnedMessage[];
+};
+
 export type GroupMember = {
   id: string;
   userId: string;

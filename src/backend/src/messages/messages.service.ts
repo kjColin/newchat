@@ -202,6 +202,57 @@ export class MessagesService {
     };
   }
 
+  async listPinned(conversationId: string, userId: string) {
+    await this.ensureParticipant(conversationId, userId);
+    return this.getPinnedMessages(conversationId);
+  }
+
+  async pinMessage(messageId: string, userId: string) {
+    const message = await this.findMessageWithAccess(messageId, userId);
+    if (message.deletedAt) throw new BadRequestException('Cannot pin deleted message');
+    await this.ensureCanManagePins(message.conversationId, userId);
+
+    await this.prisma.pinnedMessage.upsert({
+      where: {
+        conversationId_messageId: {
+          conversationId: message.conversationId,
+          messageId,
+        },
+      },
+      update: {
+        pinnedById: userId,
+        pinnedAt: new Date(),
+      },
+      create: {
+        conversationId: message.conversationId,
+        messageId,
+        pinnedById: userId,
+      },
+    });
+
+    const pinnedMessages = await this.getPinnedMessages(message.conversationId);
+    this.messagesGateway.emitPinnedMessages({ conversationId: message.conversationId, pinnedMessages });
+    return { pinnedMessages };
+  }
+
+  async unpinMessage(conversationId: string, messageId: string, userId: string) {
+    await this.ensureParticipant(conversationId, userId);
+    await this.ensureCanManagePins(conversationId, userId);
+
+    await this.prisma.pinnedMessage.delete({
+      where: {
+        conversationId_messageId: {
+          conversationId,
+          messageId,
+        },
+      },
+    }).catch(() => undefined);
+
+    const pinnedMessages = await this.getPinnedMessages(conversationId);
+    this.messagesGateway.emitPinnedMessages({ conversationId, pinnedMessages });
+    return { pinnedMessages };
+  }
+
   async findByConversation(
     conversationId: string,
     userId: string,
@@ -270,13 +321,23 @@ export class MessagesService {
     const message = await this.findMessageWithAccess(messageId, userId);
     if (message.senderId !== userId) throw new ForbiddenException('Can only delete your own messages');
 
-    const deleted = await this.prisma.message.update({
-      where: { id: messageId },
-      data: { content: '', deletedAt: new Date() },
-      include: this.messageInclude(),
+    const deleted = await this.prisma.$transaction(async prisma => {
+      const nextMessage = await prisma.message.update({
+        where: { id: messageId },
+        data: { content: '', deletedAt: new Date() },
+        include: this.messageInclude(),
+      });
+
+      await prisma.pinnedMessage.deleteMany({
+        where: { messageId },
+      });
+
+      return nextMessage;
     });
 
     this.messagesGateway.emitMessageDeleted(deleted);
+    const pinnedMessages = await this.getPinnedMessages(deleted.conversationId);
+    this.messagesGateway.emitPinnedMessages({ conversationId: deleted.conversationId, pinnedMessages });
     return deleted;
   }
 
@@ -351,6 +412,50 @@ export class MessagesService {
 
     if (!participant) throw new ForbiddenException('Not in conversation');
     return participant;
+  }
+
+  private async ensureCanManagePins(conversationId: string, userId: string) {
+    const conversation = await this.prisma.conversation.findUnique({
+      where: { id: conversationId },
+      include: {
+        group: {
+          include: {
+            members: {
+              where: { userId },
+              select: { role: true },
+            },
+          },
+        },
+      },
+    });
+
+    if (!conversation) throw new NotFoundException('Conversation not found');
+    if (conversation.type !== 'group') return;
+
+    const role = conversation.group?.members[0]?.role;
+    if (!role || !['owner', 'admin'].includes(role)) {
+      throw new ForbiddenException('Admin permission required');
+    }
+  }
+
+  private getPinnedMessages(conversationId: string) {
+    return this.prisma.pinnedMessage.findMany({
+      where: {
+        conversationId,
+        message: { deletedAt: null },
+      },
+      orderBy: { pinnedAt: 'desc' },
+      include: this.pinnedMessageInclude(),
+    });
+  }
+
+  private pinnedMessageInclude() {
+    return {
+      pinnedBy: { select: { id: true, username: true, avatar: true } },
+      message: {
+        include: this.messageInclude(),
+      },
+    };
   }
 
   private messageInclude() {

@@ -1,4 +1,4 @@
-import { CornerUpLeft, Edit3, Forward, MessageCircle, Trash2 } from 'lucide-react';
+import { CornerUpLeft, Edit3, Forward, MessageCircle, Pin, Trash2 } from 'lucide-react';
 import type { RefObject } from 'react';
 import { formatMessageTime } from '../../../shared/utils/time';
 import type { User } from '../../auth/types';
@@ -14,6 +14,7 @@ type MessageListProps = {
   unreadMarkerId?: string | null;
   listRef: RefObject<HTMLDivElement>;
   bottomRef: RefObject<HTMLDivElement>;
+  pinnedMessageIds: Set<string>;
   onLoadEarlier: () => void;
   onScroll: () => void;
   onEdit: (message: Message) => void;
@@ -21,6 +22,7 @@ type MessageListProps = {
   onReact: (message: Message, emoji: string) => void;
   onReply: (message: Message) => void;
   onForward: (message: Message) => void;
+  onTogglePin: (message: Message) => void;
 };
 
 const quickReactions = ['👍', '❤️', '😂', '😮'];
@@ -54,6 +56,7 @@ export function MessageList({
   unreadMarkerId,
   listRef,
   bottomRef,
+  pinnedMessageIds,
   onLoadEarlier,
   onScroll,
   onEdit,
@@ -61,6 +64,7 @@ export function MessageList({
   onReact,
   onReply,
   onForward,
+  onTogglePin,
 }: MessageListProps) {
   if (loading) {
     return <div className="message-state">Loading messages...</div>;
@@ -91,6 +95,7 @@ export function MessageList({
         const deleted = Boolean(message.deletedAt);
         const reactions = aggregateReactions(message, currentUser.id);
         const showUnreadDivider = message.id === unreadMarkerId;
+        const pinned = pinnedMessageIds.has(message.id);
         return (
           <div key={message.id}>
             {showUnreadDivider && <div className="unread-divider">Unread messages</div>}
@@ -135,6 +140,9 @@ export function MessageList({
                   ))}
                   <button type="button" onClick={() => onReply(message)} title="Reply"><CornerUpLeft size={13} /></button>
                   <button type="button" onClick={() => onForward(message)} title="Forward"><Forward size={13} /></button>
+                  <button className={pinned ? 'active' : ''} type="button" onClick={() => onTogglePin(message)} title={pinned ? 'Unpin' : 'Pin'}>
+                    <Pin size={13} />
+                  </button>
                   {isOwn && (
                     <>
                       <button type="button" onClick={() => onEdit(message)} title="Edit"><Edit3 size={13} /></button>
