@@ -12,7 +12,6 @@ import {
   discoverGroups,
   addGroupMembers,
   getChannelMembers,
-  getConversations,
   getConversationAttachments,
   getConversationLinks,
   getGroupInviteLinks,
@@ -26,7 +25,6 @@ import {
   revokeGroupInviteLink,
   subscribeChannel,
   unsubscribeChannel,
-  updateConversationSettings,
   updateGroup,
   unpinMessage,
 } from '../features/chats/api';
@@ -35,9 +33,9 @@ import { ConversationDetails } from '../features/chats/components/ConversationDe
 import { ConversationList } from '../features/chats/components/ConversationList';
 import { MessageComposer } from '../features/chats/components/MessageComposer';
 import { MessageList } from '../features/chats/components/MessageList';
-import { sortConversations, upsertConversation } from '../features/chats/conversation-utils';
 import type { Attachment, ChannelDiscoveryItem, Conversation, GroupDiscoveryItem, GroupMember, InviteLink, LinkPreview, Message, PinnedMessage } from '../features/chats/types';
 import { useChatSocket } from '../features/chats/useChatSocket';
+import { useConversations } from '../features/chats/useConversations';
 import { useMessages } from '../features/chats/useMessages';
 import { CreateChannelModal } from '../features/channels/components/CreateChannelModal';
 import { CreateGroupModal } from '../features/groups/components/CreateGroupModal';
@@ -115,16 +113,12 @@ export function ChatPage() {
   const navigate = useNavigate();
   const initialUser = useMemo(() => authStore.getUser(), []) as User | null;
   const [currentUser, setCurrentUser] = useState<User | null>(initialUser);
-  const [conversations, setConversations] = useState<Conversation[]>([]);
-  const [activeConversation, setActiveConversation] = useState<Conversation | null>(null);
   const [draft, setDraft] = useState('');
   const [editingMessage, setEditingMessage] = useState<Message | null>(null);
   const [replyToMessage, setReplyToMessage] = useState<Message | null>(null);
   const [pendingAttachments, setPendingAttachments] = useState<Attachment[]>([]);
-  const [loadingConversations, setLoadingConversations] = useState(true);
   const [pinnedMessages, setPinnedMessages] = useState<PinnedMessage[]>([]);
   const [pinLoading, setPinLoading] = useState(false);
-  const [sidebarError, setSidebarError] = useState('');
   const [search, setSearch] = useState('');
   const [searchResults, setSearchResults] = useState<SearchUser[]>([]);
   const [groupResults, setGroupResults] = useState<GroupDiscoveryItem[]>([]);
@@ -177,8 +171,29 @@ export function ChatPage() {
   const typingTimer = useRef<number | null>(null);
   const messageListRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
-  const conversationsRef = useRef<Conversation[]>([]);
   const selectConversationRef = useRef<(conversation: Conversation) => Promise<void>>();
+  const {
+    conversations,
+    activeConversation,
+    loadingConversations,
+    sidebarError,
+    conversationsRef,
+    setSidebarError,
+    setActiveConversation,
+    upsertConversation,
+    removeConversation,
+    updateActiveConversation,
+    applyConversationRead,
+    applyMessageActivity,
+    applyLastMessageUpdate,
+    applySentMessage,
+    applyForwardedMessage,
+    applyPresenceUpdate,
+    applyDirectUserUpdate,
+    applyMemberCount,
+    applyConversationPatch,
+    updateConversationSetting,
+  } = useConversations();
   const {
     messages,
     loadingMessages,
@@ -211,41 +226,19 @@ export function ChatPage() {
   } = useMessages({
     messageListRef,
     onConversationRead: (conversationId, lastReadAt) => {
-      setActiveConversation(prev =>
-        prev?.id === conversationId ? { ...prev, unreadCount: 0, lastReadAt: lastReadAt || prev.lastReadAt } : prev
-      );
-      setConversations(prev => prev.map(item =>
-        item.id === conversationId ? { ...item, unreadCount: 0, lastReadAt: lastReadAt || item.lastReadAt } : item
-      ));
+      applyConversationRead(conversationId, lastReadAt);
     },
     onMessageEdited: message => {
-      setConversations(prev => prev.map(conversation =>
-        conversation.lastMessage?.id === message.id ? { ...conversation, lastMessage: message } : conversation
-      ));
+      applyLastMessageUpdate(message);
     },
     onMessageSent: message => {
-      setConversations(prev => sortConversations(prev.map(conversation =>
-        conversation.id === message.conversationId
-          ? { ...conversation, lastMessage: message, unreadCount: 0, lastActivityAt: message.createdAt }
-          : conversation
-      )));
-      setActiveConversation(prev =>
-        prev?.id === message.conversationId
-          ? { ...prev, lastMessage: message, unreadCount: 0, lastActivityAt: message.createdAt }
-          : prev
-      );
+      applySentMessage(message);
     },
     onMessageDeleted: message => {
-      setConversations(prev => prev.map(conversation =>
-        conversation.lastMessage?.id === message.id ? { ...conversation, lastMessage: message } : conversation
-      ));
+      applyLastMessageUpdate(message);
     },
     onMessageForwarded: message => {
-      setConversations(prev => sortConversations(prev.map(conversation =>
-        conversation.id === message.conversationId
-          ? { ...conversation, lastMessage: message, unreadCount: 0, lastActivityAt: message.createdAt }
-          : conversation
-      )));
+      applyForwardedMessage(message);
     },
   });
   const pinnedMessageIds = useMemo(() => new Set(pinnedMessages.map(item => item.messageId)), [pinnedMessages]);
@@ -322,7 +315,7 @@ export function ChatPage() {
     setSidebarError('');
     try {
       const conversation = await joinGroupByInvite(code);
-      setConversations(prev => sortConversations(upsertConversation(prev, conversation)));
+      upsertConversation(conversation);
       setInviteInput('');
       await selectConversation(conversation);
     } catch (error: any) {
@@ -367,10 +360,6 @@ export function ChatPage() {
   }, [activeConversation?.id]);
 
   useEffect(() => {
-    conversationsRef.current = conversations;
-  }, [conversations]);
-
-  useEffect(() => {
     selectConversationRef.current = selectConversation;
   }, [selectConversation]);
 
@@ -378,27 +367,19 @@ export function ChatPage() {
     token: authStore.getToken(),
     activeConversationId: activeConversation?.id || null,
     onMessage: message => {
-      setConversations(prev => sortConversations(prev.map(conversation => {
-        if (conversation.id !== message.conversationId) return conversation;
-
-        const isActive = activeConversationId.current === message.conversationId;
-        const isOwn = message.senderId === currentUser?.id;
-        return {
-          ...conversation,
-          lastMessage: message,
-          lastActivityAt: message.createdAt,
-          unreadCount: isActive || isOwn ? 0 : (conversation.unreadCount || 0) + 1,
-        };
-      })));
+      applyMessageActivity(message, {
+        activeConversationId: activeConversationId.current,
+        currentUserId: currentUser?.id,
+      });
 
       if (activeConversationId.current === message.conversationId) {
         const wasNearBottom = isNearBottom(messageListRef.current);
         applyIncomingMessage(message);
-        setActiveConversation(prev =>
-          prev?.id === message.conversationId
-            ? { ...prev, lastMessage: message, lastActivityAt: message.createdAt, unreadCount: 0 }
-            : prev
-        );
+        updateActiveConversation(message.conversationId, {
+          lastMessage: message,
+          lastActivityAt: message.createdAt,
+          unreadCount: 0,
+        });
         if (!wasNearBottom && message.senderId !== currentUser?.id) {
           setShowJumpLatest(true);
         }
@@ -412,25 +393,19 @@ export function ChatPage() {
     onNotification: receiveNotification,
     onMessageUpdated: message => {
       applyUpdatedMessage(message);
-      setConversations(prev => prev.map(conversation =>
-        conversation.lastMessage?.id === message.id ? { ...conversation, lastMessage: message } : conversation
-      ));
+      applyLastMessageUpdate(message);
     },
     onMessageDeleted: message => {
       applyUpdatedMessage(message);
-      setConversations(prev => prev.map(conversation =>
-        conversation.lastMessage?.id === message.id ? { ...conversation, lastMessage: message } : conversation
-      ));
+      applyLastMessageUpdate(message);
     },
     onMessageReaction: message => {
       applyUpdatedMessage(message);
     },
     onMessageRead: payload => {
-      setConversations(prev => prev.map(conversation =>
-        conversation.id === payload.conversationId && payload.userId === currentUser?.id
-          ? { ...conversation, unreadCount: 0, lastReadAt: payload.lastReadAt }
-          : conversation
-      ));
+      if (payload.userId === currentUser?.id) {
+        applyConversationRead(payload.conversationId, payload.lastReadAt);
+      }
     },
     onMessagePinned: payload => {
       if (activeConversationId.current === payload.conversationId) {
@@ -455,32 +430,9 @@ export function ChatPage() {
       }
     },
     onPresenceUpdate: payload => {
-      setConversations(prev => prev.map(conversation => {
-        if (conversation.user?.id !== payload.userId) return conversation;
-        return {
-          ...conversation,
-          user: { ...conversation.user, status: payload.status, lastSeen: payload.lastSeen },
-        };
-      }));
+      applyPresenceUpdate(payload);
     },
   });
-
-  useEffect(() => {
-    async function load() {
-      setLoadingConversations(true);
-      setSidebarError('');
-      try {
-        const loaded = await getConversations();
-        setConversations(prev => sortConversations(loaded.reduce(upsertConversation, prev)));
-      } catch (error: any) {
-        setSidebarError(error.response?.data?.message || 'Could not load chats');
-      } finally {
-        setLoadingConversations(false);
-      }
-    }
-
-    load();
-  }, []);
 
   useEffect(() => {
     async function loadRelationships() {
@@ -678,12 +630,7 @@ export function ChatPage() {
     setShowJumpLatest(false);
     setUnreadMarkerId(null);
     const read = await markConversationRead(activeConversation.id).catch(() => null);
-    setActiveConversation(prev =>
-      prev?.id === activeConversation.id ? { ...prev, unreadCount: 0, lastReadAt: read?.lastReadAt || prev.lastReadAt } : prev
-    );
-    setConversations(prev => prev.map(item =>
-      item.id === activeConversation.id ? { ...item, unreadCount: 0, lastReadAt: read?.lastReadAt || item.lastReadAt } : item
-    ));
+    applyConversationRead(activeConversation.id, read?.lastReadAt);
   };
 
   const jumpToSearchResult = (message: Message) => {
@@ -709,7 +656,7 @@ export function ChatPage() {
     setSidebarError('');
     try {
       const conversation = await createDirectConversation(user.id);
-      setConversations(prev => sortConversations(upsertConversation(prev, conversation)));
+      upsertConversation(conversation);
       setSearch('');
       setSearchResults([]);
       await selectConversation(conversation);
@@ -750,16 +697,7 @@ export function ChatPage() {
       setBlockedUsers(nextBlocked);
       setContacts(nextContacts);
       syncSearchUser(user.id, { isContact: false, isBlocked: true });
-      setConversations(prev => prev.map(conversation =>
-        conversation.user?.id === user.id
-          ? { ...conversation, user: { ...conversation.user, isContact: false, isBlocked: true } }
-          : conversation
-      ));
-      setActiveConversation(prev =>
-        prev?.user?.id === user.id
-          ? { ...prev, user: { ...prev.user, isContact: false, isBlocked: true } }
-          : prev
-      );
+      applyDirectUserUpdate(user.id, { isContact: false, isBlocked: true });
     } catch (error: any) {
       setSidebarError(error.response?.data?.message || 'Could not block user');
     }
@@ -771,16 +709,7 @@ export function ChatPage() {
       const nextBlocked = await unblockUser(user.id);
       setBlockedUsers(nextBlocked);
       syncSearchUser(user.id, { isBlocked: false });
-      setConversations(prev => prev.map(conversation =>
-        conversation.user?.id === user.id
-          ? { ...conversation, user: { ...conversation.user, isBlocked: false } }
-          : conversation
-      ));
-      setActiveConversation(prev =>
-        prev?.user?.id === user.id
-          ? { ...prev, user: { ...prev.user, isBlocked: false } }
-          : prev
-      );
+      applyDirectUserUpdate(user.id, { isBlocked: false });
     } catch (error: any) {
       setSidebarError(error.response?.data?.message || 'Could not unblock user');
     }
@@ -799,7 +728,7 @@ export function ChatPage() {
     setCreateError('');
     try {
       const conversation = await createGroup(groupName.trim(), selectedMembers.map(member => member.id));
-      setConversations(prev => sortConversations(upsertConversation(prev, conversation)));
+      upsertConversation(conversation);
       setCreateGroupOpen(false);
       setGroupName('');
       setGroupSearch('');
@@ -818,7 +747,7 @@ export function ChatPage() {
     setChannelError('');
     try {
       const conversation = await createChannel(channelName.trim(), channelDescription.trim());
-      setConversations(prev => sortConversations(upsertConversation(prev, conversation)));
+      upsertConversation(conversation);
       setCreateChannelOpen(false);
       setChannelName('');
       setChannelDescription('');
@@ -835,7 +764,7 @@ export function ChatPage() {
     setSidebarError('');
     try {
       const conversation = await subscribeChannel(channel.conversationId);
-      setConversations(prev => sortConversations(upsertConversation(prev, conversation)));
+      upsertConversation(conversation);
       setChannelResults(prev => prev.map(item =>
         item.conversationId === channel.conversationId
           ? { ...item, isSubscribed: true, role: conversation.role as ChannelDiscoveryItem['role'], memberCount: conversation.memberCount }
@@ -854,7 +783,7 @@ export function ChatPage() {
     setSidebarError('');
     try {
       await unsubscribeChannel(channel.conversationId);
-      setConversations(prev => prev.filter(conversation => conversation.id !== channel.conversationId));
+      removeConversation(channel.conversationId);
       setChannelResults(prev => prev.map(item =>
         item.conversationId === channel.conversationId
           ? { ...item, isSubscribed: false, role: null, memberCount: Math.max(0, item.memberCount - 1) }
@@ -877,7 +806,7 @@ export function ChatPage() {
     setSidebarError('');
     try {
       const conversation = await joinPublicGroup(group.conversationId);
-      setConversations(prev => sortConversations(upsertConversation(prev, conversation)));
+      upsertConversation(conversation);
       setGroupResults(prev => prev.map(item =>
         item.conversationId === group.conversationId
           ? { ...item, isJoined: true, role: conversation.role as GroupDiscoveryItem['role'], memberCount: conversation.memberCount }
@@ -966,32 +895,19 @@ export function ChatPage() {
   };
 
   const handleTogglePinned = async (conversation: Conversation) => {
-    try {
-      setConversations(sortConversations(await updateConversationSettings(conversation.id, { pinned: !conversation.pinnedAt })));
-    } catch (error: any) {
-      setSidebarError(error.response?.data?.message || 'Could not update pin');
-    }
+    await updateConversationSetting(conversation, 'pinned');
   };
 
   const handleToggleMuted = async (conversation: Conversation) => {
-    const isMuted = conversation.mutedUntil && new Date(conversation.mutedUntil) > new Date();
-    try {
-      setConversations(sortConversations(await updateConversationSettings(conversation.id, { muted: !isMuted })));
-    } catch (error: any) {
-      setSidebarError(error.response?.data?.message || 'Could not update mute');
-    }
+    await updateConversationSetting(conversation, 'muted');
   };
 
   const handleArchive = async (conversation: Conversation) => {
-    try {
-      setConversations(sortConversations(await updateConversationSettings(conversation.id, { archived: true })));
-      if (activeConversation?.id === conversation.id) {
-        setActiveConversation(null);
-        resetMessages();
-        setMobileConversationOpen(false);
-      }
-    } catch (error: any) {
-      setSidebarError(error.response?.data?.message || 'Could not archive chat');
+    const updated = await updateConversationSetting(conversation, 'archived');
+    if (updated && activeConversation?.id === conversation.id) {
+      setActiveConversation(null);
+      resetMessages();
+      setMobileConversationOpen(false);
     }
   };
 
@@ -1121,8 +1037,7 @@ export function ChatPage() {
     if (!activeConversation || activeConversation.type !== 'group') return;
     try {
       const updated = await updateGroup(activeConversation.id, { name: groupNameDraft.trim() });
-      setActiveConversation(prev => prev && prev.id === updated.id ? { ...prev, ...updated } : prev);
-      setConversations(prev => prev.map(conversation => conversation.id === updated.id ? { ...conversation, ...updated } : conversation));
+      applyConversationPatch(updated.id, updated);
     } catch (error: any) {
       setDetailsError(error.response?.data?.message || 'Could not update group');
     }
@@ -1132,8 +1047,7 @@ export function ChatPage() {
     if (!activeConversation || activeConversation.type !== 'group') return;
     try {
       const updated = await updateGroup(activeConversation.id, { announcement: announcementDraft });
-      setActiveConversation(prev => prev && prev.id === updated.id ? { ...prev, ...updated } : prev);
-      setConversations(prev => prev.map(conversation => conversation.id === updated.id ? { ...conversation, ...updated } : conversation));
+      applyConversationPatch(updated.id, updated);
       setDetailsNotice('Announcement saved');
     } catch (error: any) {
       setDetailsError(error.response?.data?.message || 'Could not update announcement');
@@ -1147,10 +1061,7 @@ export function ChatPage() {
       setMembers(nextMembers);
       setMemberSearch('');
       setMemberSearchResults([]);
-      setActiveConversation(prev => prev ? { ...prev, memberCount: nextMembers.length } : prev);
-      setConversations(prev => prev.map(conversation =>
-        conversation.id === activeConversation.id ? { ...conversation, memberCount: nextMembers.length } : conversation
-      ));
+      applyMemberCount(activeConversation.id, nextMembers.length);
     } catch (error: any) {
       setDetailsError(error.response?.data?.message || 'Could not add member');
     }
@@ -1161,10 +1072,7 @@ export function ChatPage() {
     try {
       const nextMembers = await removeGroupMember(activeConversation.id, userId);
       setMembers(nextMembers);
-      setActiveConversation(prev => prev ? { ...prev, memberCount: nextMembers.length } : prev);
-      setConversations(prev => prev.map(conversation =>
-        conversation.id === activeConversation.id ? { ...conversation, memberCount: nextMembers.length } : conversation
-      ));
+      applyMemberCount(activeConversation.id, nextMembers.length);
     } catch (error: any) {
       setDetailsError(error.response?.data?.message || 'Could not remove member');
     }
