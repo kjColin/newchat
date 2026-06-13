@@ -8,19 +8,15 @@ import {
   createDirectConversation,
   createGroup,
   createGroupInviteLink,
-  deleteMessage,
   discoverChannels,
   discoverGroups,
-  editMessage,
   addGroupMembers,
-  forwardMessage,
   getChannelMembers,
   getConversations,
   getConversationAttachments,
   getConversationLinks,
   getGroupInviteLinks,
   getGroupMembers,
-  getMessages,
   getPinnedMessages,
   joinGroupByInvite,
   joinPublicGroup,
@@ -28,23 +24,21 @@ import {
   pinMessage,
   removeGroupMember,
   revokeGroupInviteLink,
-  searchMessages,
-  sendMessage,
   subscribeChannel,
-  toggleReaction,
   unsubscribeChannel,
   updateConversationSettings,
   updateGroup,
   unpinMessage,
-  uploadFile,
 } from '../features/chats/api';
 import { ChatHeader } from '../features/chats/components/ChatHeader';
 import { ConversationDetails } from '../features/chats/components/ConversationDetails';
 import { ConversationList } from '../features/chats/components/ConversationList';
 import { MessageComposer } from '../features/chats/components/MessageComposer';
 import { MessageList } from '../features/chats/components/MessageList';
+import { sortConversations, upsertConversation } from '../features/chats/conversation-utils';
 import type { Attachment, ChannelDiscoveryItem, Conversation, GroupDiscoveryItem, GroupMember, InviteLink, LinkPreview, Message, PinnedMessage } from '../features/chats/types';
 import { useChatSocket } from '../features/chats/useChatSocket';
+import { useMessages } from '../features/chats/useMessages';
 import { CreateChannelModal } from '../features/channels/components/CreateChannelModal';
 import { CreateGroupModal } from '../features/groups/components/CreateGroupModal';
 import { ProfileModal } from '../features/users/components/ProfileModal';
@@ -63,26 +57,6 @@ import type { BlockedUserEntry, ContactEntry, SearchUser } from '../features/use
 import { NotificationMenu } from '../features/notifications/components/NotificationMenu';
 import { useNotifications } from '../features/notifications/useNotifications';
 import './Chat.css';
-
-function upsertConversation(list: Conversation[], conversation: Conversation) {
-  const exists = list.some(item => item.id === conversation.id);
-  if (exists) return list.map(item => item.id === conversation.id ? conversation : item);
-  return [conversation, ...list];
-}
-
-function sortConversations(list: Conversation[]) {
-  return [...list].sort((a, b) => {
-    if (a.pinnedAt && !b.pinnedAt) return -1;
-    if (!a.pinnedAt && b.pinnedAt) return 1;
-    return new Date(b.lastActivityAt || b.lastMessage?.createdAt || 0).getTime() -
-      new Date(a.lastActivityAt || a.lastMessage?.createdAt || 0).getTime();
-  });
-}
-
-function createClientId() {
-  const random = Math.random().toString(36).slice(2);
-  return `${Date.now().toString(36)}-${random}`;
-}
 
 function isNearBottom(element: HTMLElement | null) {
   if (!element) return true;
@@ -143,25 +117,14 @@ export function ChatPage() {
   const [currentUser, setCurrentUser] = useState<User | null>(initialUser);
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [activeConversation, setActiveConversation] = useState<Conversation | null>(null);
-  const [messages, setMessages] = useState<Message[]>([]);
   const [draft, setDraft] = useState('');
   const [editingMessage, setEditingMessage] = useState<Message | null>(null);
   const [replyToMessage, setReplyToMessage] = useState<Message | null>(null);
   const [pendingAttachments, setPendingAttachments] = useState<Attachment[]>([]);
   const [loadingConversations, setLoadingConversations] = useState(true);
-  const [loadingMessages, setLoadingMessages] = useState(false);
-  const [loadingEarlier, setLoadingEarlier] = useState(false);
-  const [hasMoreMessages, setHasMoreMessages] = useState(false);
   const [pinnedMessages, setPinnedMessages] = useState<PinnedMessage[]>([]);
   const [pinLoading, setPinLoading] = useState(false);
-  const [unreadMarkerId, setUnreadMarkerId] = useState<string | null>(null);
-  const [showJumpLatest, setShowJumpLatest] = useState(false);
-  const [sending, setSending] = useState(false);
   const [sidebarError, setSidebarError] = useState('');
-  const [messageError, setMessageError] = useState('');
-  const [messageSearch, setMessageSearch] = useState('');
-  const [messageSearchResults, setMessageSearchResults] = useState<Message[]>([]);
-  const [searchingMessages, setSearchingMessages] = useState(false);
   const [search, setSearch] = useState('');
   const [searchResults, setSearchResults] = useState<SearchUser[]>([]);
   const [groupResults, setGroupResults] = useState<GroupDiscoveryItem[]>([]);
@@ -216,6 +179,75 @@ export function ChatPage() {
   const bottomRef = useRef<HTMLDivElement>(null);
   const conversationsRef = useRef<Conversation[]>([]);
   const selectConversationRef = useRef<(conversation: Conversation) => Promise<void>>();
+  const {
+    messages,
+    loadingMessages,
+    loadingEarlier,
+    hasMoreMessages,
+    unreadMarkerId,
+    showJumpLatest,
+    messageError,
+    messageSearch,
+    messageSearchResults,
+    searchingMessages,
+    sending,
+    setMessageError,
+    setUnreadMarkerId,
+    setShowJumpLatest,
+    resetMessages,
+    loadConversationMessages,
+    sendCurrentMessage,
+    forwardCurrentMessage,
+    deleteCurrentMessage,
+    reactToMessage,
+    searchConversationMessages,
+    uploadAttachments,
+    loadEarlierMessages: loadEarlierConversationMessages,
+    applyIncomingMessage,
+    applyUpdatedMessage,
+    applyProfileUpdate,
+    ensureMessageVisible,
+    clearMessageSearch,
+  } = useMessages({
+    messageListRef,
+    onConversationRead: (conversationId, lastReadAt) => {
+      setActiveConversation(prev =>
+        prev?.id === conversationId ? { ...prev, unreadCount: 0, lastReadAt: lastReadAt || prev.lastReadAt } : prev
+      );
+      setConversations(prev => prev.map(item =>
+        item.id === conversationId ? { ...item, unreadCount: 0, lastReadAt: lastReadAt || item.lastReadAt } : item
+      ));
+    },
+    onMessageEdited: message => {
+      setConversations(prev => prev.map(conversation =>
+        conversation.lastMessage?.id === message.id ? { ...conversation, lastMessage: message } : conversation
+      ));
+    },
+    onMessageSent: message => {
+      setConversations(prev => sortConversations(prev.map(conversation =>
+        conversation.id === message.conversationId
+          ? { ...conversation, lastMessage: message, unreadCount: 0, lastActivityAt: message.createdAt }
+          : conversation
+      )));
+      setActiveConversation(prev =>
+        prev?.id === message.conversationId
+          ? { ...prev, lastMessage: message, unreadCount: 0, lastActivityAt: message.createdAt }
+          : prev
+      );
+    },
+    onMessageDeleted: message => {
+      setConversations(prev => prev.map(conversation =>
+        conversation.lastMessage?.id === message.id ? { ...conversation, lastMessage: message } : conversation
+      ));
+    },
+    onMessageForwarded: message => {
+      setConversations(prev => sortConversations(prev.map(conversation =>
+        conversation.id === message.conversationId
+          ? { ...conversation, lastMessage: message, unreadCount: 0, lastActivityAt: message.createdAt }
+          : conversation
+      )));
+    },
+  });
   const pinnedMessageIds = useMemo(() => new Set(pinnedMessages.map(item => item.messageId)), [pinnedMessages]);
   const {
     notifications,
@@ -254,50 +286,17 @@ export function ChatPage() {
     setAnnouncementDraft(conversation.announcement || '');
     setReplyToMessage(null);
     setPendingAttachments([]);
-    setMessageSearch('');
-    setMessageSearchResults([]);
-    setHasMoreMessages(false);
+    resetMessages();
     setPinnedMessages([]);
-    setUnreadMarkerId(null);
-    setShowJumpLatest(false);
     setDetailsOpen(false);
     setMobileConversationOpen(true);
     markConversationNotificationsLocalRead(conversation.id);
-    setLoadingMessages(true);
-    setMessageError('');
 
-    try {
-      const data = await getMessages(conversation.id);
-      setMessages(data.messages);
-      setHasMoreMessages(data.hasMore);
-      getPinnedMessages(conversation.id)
-        .then(setPinnedMessages)
-        .catch(() => setPinnedMessages([]));
-      const marker = conversation.lastReadAt
-        ? data.messages.find(message =>
-            message.senderId !== currentUser.id &&
-            new Date(message.createdAt) > new Date(conversation.lastReadAt as string)
-          )
-        : null;
-      setUnreadMarkerId(marker?.id || null);
-      setShowJumpLatest(Boolean(marker));
-      const read = await markConversationRead(conversation.id).catch(() => null);
-      setActiveConversation(prev =>
-        prev?.id === conversation.id ? { ...prev, unreadCount: 0, lastReadAt: read?.lastReadAt || prev.lastReadAt } : prev
-      );
-      setConversations(prev => prev.map(item =>
-        item.id === conversation.id ? { ...item, unreadCount: 0, lastReadAt: read?.lastReadAt || item.lastReadAt } : item
-      ));
-    } catch (error: any) {
-      setMessages([]);
-      setHasMoreMessages(false);
-      setUnreadMarkerId(null);
-      setShowJumpLatest(false);
-      setMessageError(error.response?.data?.message || 'Could not load messages');
-    } finally {
-      setLoadingMessages(false);
-    }
-  }, [markConversationNotificationsLocalRead]);
+    getPinnedMessages(conversation.id)
+      .then(setPinnedMessages)
+      .catch(() => setPinnedMessages([]));
+    await loadConversationMessages({ conversation, currentUserId: currentUser.id });
+  }, [currentUser.id, loadConversationMessages, markConversationNotificationsLocalRead, resetMessages]);
 
   const showMessageNotification = useCallback((message: Message) => {
     const conversation = conversationsRef.current.find(item => item.id === message.conversationId);
@@ -394,7 +393,7 @@ export function ChatPage() {
 
       if (activeConversationId.current === message.conversationId) {
         const wasNearBottom = isNearBottom(messageListRef.current);
-        setMessages(prev => prev.some(existing => existing.id === message.id) ? prev : [...prev, message]);
+        applyIncomingMessage(message);
         setActiveConversation(prev =>
           prev?.id === message.conversationId
             ? { ...prev, lastMessage: message, lastActivityAt: message.createdAt, unreadCount: 0 }
@@ -412,19 +411,19 @@ export function ChatPage() {
     },
     onNotification: receiveNotification,
     onMessageUpdated: message => {
-      setMessages(prev => prev.map(item => item.id === message.id ? message : item));
+      applyUpdatedMessage(message);
       setConversations(prev => prev.map(conversation =>
         conversation.lastMessage?.id === message.id ? { ...conversation, lastMessage: message } : conversation
       ));
     },
     onMessageDeleted: message => {
-      setMessages(prev => prev.map(item => item.id === message.id ? message : item));
+      applyUpdatedMessage(message);
       setConversations(prev => prev.map(conversation =>
         conversation.lastMessage?.id === message.id ? { ...conversation, lastMessage: message } : conversation
       ));
     },
     onMessageReaction: message => {
-      setMessages(prev => prev.map(item => item.id === message.id ? message : item));
+      applyUpdatedMessage(message);
     },
     onMessageRead: payload => {
       setConversations(prev => prev.map(conversation =>
@@ -571,47 +570,22 @@ export function ChatPage() {
   if (!currentUser) return null;
 
   const handleSend = async () => {
-    const content = draft.trim();
-    if (!activeConversation || (!content && pendingAttachments.length === 0)) return;
+    const result = await sendCurrentMessage({
+      conversation: activeConversation,
+      content: draft,
+      editingMessage,
+      replyToMessage,
+      pendingAttachments,
+    });
+    if (!result) return;
 
-    setSending(true);
-    setMessageError('');
-    try {
-      if (editingMessage) {
-        const message = await editMessage(editingMessage.id, content);
-        setMessages(prev => prev.map(existing => existing.id === message.id ? message : existing));
-        setConversations(prev => prev.map(conversation =>
-          conversation.lastMessage?.id === message.id ? { ...conversation, lastMessage: message } : conversation
-        ));
-        setEditingMessage(null);
-      } else {
-        const hasImage = pendingAttachments.some(attachment => attachment.kind === 'image');
-        const message = await sendMessage(activeConversation.id, content, {
-          clientId: createClientId(),
-          replyToId: replyToMessage?.id,
-          attachmentIds: pendingAttachments.map(attachment => attachment.id),
-          type: pendingAttachments.length > 0 ? (hasImage ? 'image' : 'file') : 'text',
-        });
-        setMessages(prev => prev.some(existing => existing.id === message.id) ? prev : [...prev, message]);
-        setConversations(prev => sortConversations(prev.map(conversation =>
-          conversation.id === message.conversationId
-            ? { ...conversation, lastMessage: message, unreadCount: 0, lastActivityAt: message.createdAt }
-            : conversation
-        )));
-        setActiveConversation(prev =>
-          prev?.id === message.conversationId
-            ? { ...prev, lastMessage: message, unreadCount: 0, lastActivityAt: message.createdAt }
-            : prev
-        );
-        setReplyToMessage(null);
-        setPendingAttachments([]);
-      }
-      setDraft('');
-    } catch (error: any) {
-      setMessageError(error.response?.data?.message || 'Could not send message');
-    } finally {
-      setSending(false);
+    if (result.mode === 'edit') {
+      setEditingMessage(null);
+    } else {
+      setReplyToMessage(null);
+      setPendingAttachments([]);
     }
+    setDraft('');
   };
 
   const handleDraftChange = (value: string) => {
@@ -640,17 +614,9 @@ export function ChatPage() {
   };
 
   const handleSelectFiles = async (files: FileList | null) => {
-    if (!files || files.length === 0) return;
-
-    setMessageError('');
-    setSending(true);
-    try {
-      const nextAttachments = await Promise.all(Array.from(files).slice(0, 10).map(file => uploadFile(file)));
+    const nextAttachments = await uploadAttachments(files);
+    if (nextAttachments.length > 0) {
       setPendingAttachments(prev => [...prev, ...nextAttachments].slice(0, 10));
-    } catch (error: any) {
-      setMessageError(error.response?.data?.message || 'Could not upload file');
-    } finally {
-      setSending(false);
     }
   };
 
@@ -659,19 +625,7 @@ export function ChatPage() {
   };
 
   const handleForward = async (message: Message) => {
-    if (!activeConversation) return;
-    setMessageError('');
-    try {
-      const forwarded = await forwardMessage(message.id, activeConversation.id, createClientId());
-      setMessages(prev => prev.some(existing => existing.id === forwarded.id) ? prev : [...prev, forwarded]);
-      setConversations(prev => sortConversations(prev.map(conversation =>
-        conversation.id === forwarded.conversationId
-          ? { ...conversation, lastMessage: forwarded, unreadCount: 0, lastActivityAt: forwarded.createdAt }
-          : conversation
-      )));
-    } catch (error: any) {
-      setMessageError(error.response?.data?.message || 'Could not forward message');
-    }
+    await forwardCurrentMessage(message, activeConversation);
   };
 
   const handleTogglePin = async (message: Message) => {
@@ -691,80 +645,23 @@ export function ChatPage() {
   };
 
   const handleDelete = async (message: Message) => {
-    setMessageError('');
-    try {
-      const deleted = await deleteMessage(message.id);
-      setMessages(prev => prev.map(item => item.id === deleted.id ? deleted : item));
-      setConversations(prev => prev.map(conversation =>
-        conversation.lastMessage?.id === deleted.id ? { ...conversation, lastMessage: deleted } : conversation
-      ));
-      if (editingMessage?.id === message.id) {
-        setEditingMessage(null);
-        setDraft('');
-      }
-    } catch (error: any) {
-      setMessageError(error.response?.data?.message || 'Could not delete message');
+    const deleted = await deleteCurrentMessage(message);
+    if (deleted && editingMessage?.id === message.id) {
+      setEditingMessage(null);
+      setDraft('');
     }
   };
 
   const handleReact = async (message: Message, emoji: string) => {
-    try {
-      const updated = await toggleReaction(message.id, emoji);
-      setMessages(prev => prev.map(item => item.id === updated.id ? updated : item));
-    } catch (error: any) {
-      setMessageError(error.response?.data?.message || 'Could not update reaction');
-    }
+    await reactToMessage(message, emoji);
   };
 
   const handleMessageSearch = async (value: string) => {
-    setMessageSearch(value);
-    if (!activeConversation || value.trim().length < 2) {
-      setMessageSearchResults([]);
-      return;
-    }
-
-    setSearchingMessages(true);
-    try {
-      const data = await searchMessages(activeConversation.id, value.trim());
-      setMessageSearchResults(data.messages);
-    } catch (error: any) {
-      setMessageError(error.response?.data?.message || 'Could not search messages');
-      setMessageSearchResults([]);
-    } finally {
-      setSearchingMessages(false);
-    }
+    await searchConversationMessages(activeConversation, value);
   };
 
   const loadEarlierMessages = async () => {
-    if (!activeConversation || messages.length === 0 || loadingEarlier || !hasMoreMessages) return;
-
-    const first = messages[0];
-    const list = messageListRef.current;
-    const previousHeight = list?.scrollHeight || 0;
-    setLoadingEarlier(true);
-    setMessageError('');
-
-    try {
-      const data = await getMessages(activeConversation.id, {
-        beforeCreatedAt: first.createdAt,
-        beforeId: first.id,
-      });
-      setMessages(prev => {
-        const existing = new Set(prev.map(message => message.id));
-        const older = data.messages.filter(message => !existing.has(message.id));
-        return [...older, ...prev];
-      });
-      setHasMoreMessages(data.hasMore);
-
-      window.setTimeout(() => {
-        if (!list) return;
-        list.scrollTop = list.scrollHeight - previousHeight + list.scrollTop;
-      }, 0);
-    } catch (error: any) {
-      setMessageError(error.response?.data?.message || 'Could not load earlier messages');
-    } finally {
-      setLoadingEarlier(false);
-    }
+    await loadEarlierConversationMessages(activeConversation);
   };
 
   const handleMessageScroll = () => {
@@ -790,14 +687,8 @@ export function ChatPage() {
   };
 
   const jumpToSearchResult = (message: Message) => {
-    setMessageSearch('');
-    setMessageSearchResults([]);
-    const found = messages.some(item => item.id === message.id);
-    if (!found) {
-      setMessages(prev => [...prev, message].sort((a, b) =>
-        new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
-      ));
-    }
+    clearMessageSearch();
+    ensureMessageVisible(message);
 
     window.setTimeout(() => {
       document.getElementById(`message-${message.id}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -806,12 +697,7 @@ export function ChatPage() {
 
   const jumpToPinnedMessage = (pinned: PinnedMessage) => {
     const message = pinned.message;
-    const found = messages.some(item => item.id === message.id);
-    if (!found) {
-      setMessages(prev => [...prev, message].sort((a, b) =>
-        new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
-      ));
-    }
+    ensureMessageVisible(message);
 
     window.setTimeout(() => {
       document.getElementById(`message-${message.id}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -976,7 +862,7 @@ export function ChatPage() {
       ));
       if (activeConversation?.id === channel.conversationId) {
         setActiveConversation(null);
-        setMessages([]);
+        resetMessages();
         setMobileConversationOpen(false);
       }
     } catch (error: any) {
@@ -1058,11 +944,7 @@ export function ChatPage() {
       setProfileAvatar(updated.avatar || '');
       setProfileSearchable(updated.searchable !== false);
       setProfileAllowDirectMessages(updated.allowDirectMessages !== false);
-      setMessages(prev => prev.map(message =>
-        message.senderId === updated.id
-          ? { ...message, sender: { ...(message.sender || {}), id: updated.id, username: updated.username, avatar: updated.avatar } }
-          : message
-      ));
+      applyProfileUpdate(updated);
       setPinnedMessages(prev => prev.map(pinned => ({
         ...pinned,
         pinnedBy: pinned.pinnedById === updated.id
@@ -1105,7 +987,7 @@ export function ChatPage() {
       setConversations(sortConversations(await updateConversationSettings(conversation.id, { archived: true })));
       if (activeConversation?.id === conversation.id) {
         setActiveConversation(null);
-        setMessages([]);
+        resetMessages();
         setMobileConversationOpen(false);
       }
     } catch (error: any) {
