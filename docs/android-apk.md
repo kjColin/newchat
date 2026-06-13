@@ -62,6 +62,12 @@ Download the APK from the workflow run artifacts:
 newchat-debug-apk/app-debug.apk
 ```
 
+The latest verified run at the time of this update is:
+
+- Run: `https://github.com/kjColin/newchat/actions/runs/27465452273`
+- Artifact: `newchat-debug-apk`
+- Digest: `sha256:102461b5d7b0912919071abbc0718faa8e47face3f2708080863b8bd401a1dc6`
+
 ## Android Studio
 
 Open the generated Android project when interactive debugging is needed:

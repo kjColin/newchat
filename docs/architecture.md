@@ -514,21 +514,21 @@ Data
 
 ## 14. 当前风险
 
-- `newchat` 目录与实际运行目录不一致，容易导致部署和维护误操作；当前已用 `docs/deployment.md` 与 `deploy/` 模板记录线上目录、端口和服务入口。
+- `chat-app` 是当前实际源码 checkout，`newchat` 是产品/域名/服务名；当前已用 `docs/deployment.md`、`deploy/` 模板和 `scripts/ensure-newchat-workspace-alias.sh` 固化目录关系，避免按产品名查找项目时误操作。
 - `.env`、`dist`、`node_modules`、备份文件出现在工作区，版本管理边界不清。
 - 生产环境已强制校验 `JWT_SECRET` 和 `CORS_ORIGINS`；部署时必须提供真实密钥和前端域名。
 - 自动化测试已覆盖核心 REST 流程、Socket 实时事件、多设备在线状态和 Web Push 注册降级；真实浏览器 Push 投递仍需要端到端环境验证。
 - 站内通知已持久化并支持保留策略；Web Push 已具备可配置投递路径，生产需要配置 VAPID key 并验证浏览器/平台兼容性。
 - `Chat.tsx` 已抽出通知状态、Socket 编排、消息状态、会话列表、详情侧栏、用户搜索和创建会话表单 hook，并已为通知、Socket、会话、消息、详情、用户搜索和创建会话 hook 补上单元测试；创建群/频道弹窗、消息列表、编辑器、会话列表和详情面板已补组件交互测试，`ChatPage` 编排层已覆盖未登录重定向、会话选择、消息操作、侧栏发现/关系、详情、通知和资料更新路径。后续风险主要在真实浏览器 Push 验证和工程边界清理。
-- Android APK 构建链路已接入 Capacitor；仍需在 Android SDK 环境中产出 debug APK，并在真机验证登录、Socket、附件上传和通知体验。
+- Android APK 构建链路已接入 Capacitor，并已通过 GitHub Actions 产出 `newchat-debug-apk`；仍需在真机验证登录、Socket、附件上传和通知体验。
 
 ## 15. 近期落地建议
 
 优先顺序：
 
-1. 继续清理工程边界，将 `newchat` 与 `chat-app` 的命名和部署目录关系从文档约束推进到目录/服务统一。
+1. 在生产机执行 `scripts/ensure-newchat-workspace-alias.sh` 并将 `newchat`/`chat-app` 目录关系纳入部署检查。
 2. 在真实浏览器环境验证 Web Push 投递、权限拒绝和 subscription 失效清理。
-3. 构建 Android debug APK，并在真机验证登录、Socket 实时消息、文件上传和前后台通知体验。
+3. 下载 GitHub Actions 产出的 Android debug APK，并在真机验证登录、Socket 实时消息、文件上传和前后台通知体验。
 4. 规划 Redis adapter、对象存储和消息队列接入。
 5. 在已建立的 Vitest + Testing Library 基线上，继续补真实浏览器级别的端到端验证，覆盖登录后主聊天流、Web Push 权限和订阅失效路径。
 

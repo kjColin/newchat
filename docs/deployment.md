@@ -4,13 +4,22 @@ This document records the current production deployment contract for `newchat.cl
 
 ## Runtime Layout
 
-The active deployment uses the `chat-app` workspace:
+The active deployment uses the `chat-app` checkout as the canonical source workspace:
 
 - Backend working directory: `/root/.openclaw/workspace/chat-app/src/backend`
 - Frontend working directory: `/root/.openclaw/workspace/chat-app/src/frontend`
 - Backend listen address: `127.0.0.1:3101`
 - Frontend preview address: `127.0.0.1:4173`
 - Public entrypoint: `https://newchat.clnkj.de`
+
+For operator ergonomics, `/root/.openclaw/workspace/newchat` should be a symlink to the canonical checkout:
+
+```bash
+cd /root/.openclaw/workspace/chat-app
+scripts/ensure-newchat-workspace-alias.sh
+```
+
+This keeps the product/deployment name (`newchat`) discoverable without moving the currently deployed checkout or changing systemd working directories.
 
 The backend build output entrypoint is:
 
