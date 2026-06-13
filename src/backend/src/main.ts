@@ -1,6 +1,6 @@
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
-import express from 'express';
+import * as express from 'express';
 import { join } from 'path';
 import { AppModule } from './app.module';
 import { getCorsOrigins, getHost, getPort, validateRuntimeConfig } from './common/config';
