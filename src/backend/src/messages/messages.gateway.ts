@@ -1,3 +1,4 @@
+import { OnModuleDestroy } from '@nestjs/common';
 import {
   ConnectedSocket,
   MessageBody,
@@ -18,7 +19,7 @@ import { getCorsOrigins, getJwtSecret } from '../common/config';
     credentials: true,
   },
 })
-export class MessagesGateway implements OnGatewayConnection, OnGatewayDisconnect {
+export class MessagesGateway implements OnGatewayConnection, OnGatewayDisconnect, OnModuleDestroy {
   @WebSocketServer()
   server: Server;
 
@@ -68,6 +69,12 @@ export class MessagesGateway implements OnGatewayConnection, OnGatewayDisconnect
     if (!userId) return;
 
     this.markSocketDisconnected(userId, client.id);
+  }
+
+  onModuleDestroy() {
+    this.offlineTimers.forEach(timer => clearTimeout(timer));
+    this.offlineTimers.clear();
+    this.activeSocketsByUser.clear();
   }
 
   @SubscribeMessage('joinConversation')
@@ -212,6 +219,7 @@ export class MessagesGateway implements OnGatewayConnection, OnGatewayDisconnect
       });
       this.offlineTimers.delete(userId);
     }, 15000);
+    timer.unref?.();
 
     this.offlineTimers.set(userId, timer);
   }
