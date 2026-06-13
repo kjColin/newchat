@@ -1,8 +1,14 @@
-import { Copy, Link2, Plus, Trash2, X } from 'lucide-react';
+import { Copy, FileText, Link2, Plus, Trash2, X } from 'lucide-react';
 import { Avatar } from '../../../shared/components/Avatar';
 import type { User } from '../../auth/types';
 import type { SearchUser } from '../../users/types';
-import type { Conversation, GroupMember, InviteLink } from '../types';
+import type { Attachment, Conversation, GroupMember, InviteLink } from '../types';
+
+function formatFileSize(size: number) {
+  if (size < 1024) return `${size} B`;
+  if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`;
+  return `${(size / 1024 / 1024).toFixed(1)} MB`;
+}
 
 type ConversationDetailsProps = {
   open: boolean;
@@ -15,6 +21,9 @@ type ConversationDetailsProps = {
   inviteLinks: InviteLink[];
   inviteLinkBaseUrl: string;
   inviteLoading: boolean;
+  mediaAttachments: Attachment[];
+  fileAttachments: Attachment[];
+  attachmentsLoading: boolean;
   loading: boolean;
   error: string;
   notice: string;
@@ -40,6 +49,9 @@ export function ConversationDetails({
   inviteLinks,
   inviteLinkBaseUrl,
   inviteLoading,
+  mediaAttachments,
+  fileAttachments,
+  attachmentsLoading,
   loading,
   error,
   notice,
@@ -74,6 +86,43 @@ export function ConversationDetails({
           <Avatar name={conversation.name} src={conversation.avatar} status={conversation.user?.status} size="lg" />
           <strong>{conversation.name}</strong>
           <span>{isGroup ? `${conversation.memberCount} members` : conversation.user?.email}</span>
+        </div>
+
+        <div className="details-section">
+          <label>Media</label>
+          {attachmentsLoading && <div className="state-banner flush">Loading shared files...</div>}
+          <div className="media-grid">
+            {mediaAttachments.map(attachment => (
+              <a className="media-thumb" href={attachment.url} target="_blank" rel="noreferrer" key={attachment.id} title={attachment.fileName}>
+                {attachment.kind === 'image' ? (
+                  <img src={attachment.url} alt={attachment.fileName} />
+                ) : (
+                  <span>{attachment.kind}</span>
+                )}
+              </a>
+            ))}
+          </div>
+          {!attachmentsLoading && mediaAttachments.length === 0 && (
+            <div className="state-banner flush">No media</div>
+          )}
+        </div>
+
+        <div className="details-section">
+          <label>Files</label>
+          <div className="file-list">
+            {fileAttachments.map(attachment => (
+              <a className="shared-file-row" href={attachment.url} target="_blank" rel="noreferrer" key={attachment.id}>
+                <FileText size={18} />
+                <span>
+                  <strong>{attachment.fileName}</strong>
+                  <small>{formatFileSize(attachment.size)} · {attachment.message?.sender?.username || attachment.uploader?.username || 'User'}</small>
+                </span>
+              </a>
+            ))}
+          </div>
+          {!attachmentsLoading && fileAttachments.length === 0 && (
+            <div className="state-banner flush">No files</div>
+          )}
         </div>
 
         {isGroup && canManage && (

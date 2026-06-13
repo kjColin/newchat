@@ -6,6 +6,7 @@ import {
   EditMessageDto,
   ForwardMessageDto,
   GetMessagesQueryDto,
+  ListAttachmentsQueryDto,
   SearchMessagesQueryDto,
   ToggleReactionDto,
 } from './dto/message.dto';
@@ -27,6 +28,20 @@ export class MessagesController {
     @Query() query: SearchMessagesQueryDto,
   ) {
     return this.messagesService.search(conversationId, req.user.userId, query.q, query.limit || 20);
+  }
+
+  @Get(':conversationId/attachments')
+  async listAttachments(
+    @Request() req: any,
+    @Param('conversationId') conversationId: string,
+    @Query() query: ListAttachmentsQueryDto,
+  ) {
+    return this.messagesService.listAttachments(conversationId, req.user.userId, {
+      kind: query.kind,
+      limit: query.limit || 40,
+      beforeCreatedAt: query.beforeCreatedAt,
+      beforeId: query.beforeId,
+    });
   }
 
   @Post(':messageId/forward')

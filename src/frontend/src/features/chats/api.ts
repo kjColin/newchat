@@ -1,6 +1,7 @@
 import { apiClient } from '../../shared/api/client';
 import type {
   Attachment,
+  AttachmentsResponse,
   Conversation,
   GroupMember,
   InviteLink,
@@ -72,6 +73,16 @@ export async function forwardMessage(messageId: string, conversationId: string, 
 export async function searchMessages(conversationId: string, query: string) {
   const { data } = await apiClient.get<MessageSearchResponse>(`/messages/${conversationId}/search`, {
     params: { q: query },
+  });
+  return data;
+}
+
+export async function getConversationAttachments(
+  conversationId: string,
+  options: { kind?: string; limit?: number; beforeCreatedAt?: string; beforeId?: string } = {},
+) {
+  const { data } = await apiClient.get<AttachmentsResponse>(`/messages/${conversationId}/attachments`, {
+    params: options,
   });
   return data;
 }

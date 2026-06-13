@@ -12,6 +12,7 @@ import {
   addGroupMembers,
   forwardMessage,
   getConversations,
+  getConversationAttachments,
   getGroupInviteLinks,
   getGroupMembers,
   getMessages,
@@ -135,6 +136,9 @@ export function ChatPage() {
   const [membersLoading, setMembersLoading] = useState(false);
   const [detailsError, setDetailsError] = useState('');
   const [detailsNotice, setDetailsNotice] = useState('');
+  const [mediaAttachments, setMediaAttachments] = useState<Attachment[]>([]);
+  const [fileAttachments, setFileAttachments] = useState<Attachment[]>([]);
+  const [attachmentsLoading, setAttachmentsLoading] = useState(false);
   const [memberSearch, setMemberSearch] = useState('');
   const [memberSearchResults, setMemberSearchResults] = useState<SearchUser[]>([]);
   const [groupNameDraft, setGroupNameDraft] = useState('');
@@ -606,9 +610,23 @@ export function ChatPage() {
     setDetailsError('');
     setDetailsNotice('');
     setInviteLinks([]);
+    setMembers([]);
+    setMediaAttachments([]);
+    setFileAttachments([]);
     setGroupNameDraft(activeConversation.name);
     setMemberSearch('');
     setMemberSearchResults([]);
+
+    setAttachmentsLoading(true);
+    try {
+      const data = await getConversationAttachments(activeConversation.id, { limit: 80 });
+      setMediaAttachments(data.attachments.filter(attachment => attachment.kind !== 'file'));
+      setFileAttachments(data.attachments.filter(attachment => attachment.kind === 'file'));
+    } catch (error: any) {
+      setDetailsError(error.response?.data?.message || 'Could not load shared files');
+    } finally {
+      setAttachmentsLoading(false);
+    }
 
     if (activeConversation.type !== 'group') return;
 
@@ -837,6 +855,9 @@ export function ChatPage() {
         inviteLinks={inviteLinks}
         inviteLinkBaseUrl={`${window.location.origin}/chat?invite=`}
         inviteLoading={inviteLoading}
+        mediaAttachments={mediaAttachments}
+        fileAttachments={fileAttachments}
+        attachmentsLoading={attachmentsLoading}
         loading={membersLoading}
         error={detailsError}
         notice={detailsNotice}

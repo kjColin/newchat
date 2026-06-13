@@ -233,6 +233,50 @@
 }
 ```
 
+### GET /api/messages/:conversationId/attachments
+获取当前会话内未删除消息关联的附件列表，用于会话详情中的媒体/文件视图。
+
+**Query**:
+
+`?kind=image|video|audio|file&limit=40&beforeCreatedAt=<iso-timestamp>&beforeId=<attachment-id>`
+
+`kind` 可选；不传时返回全部附件。分页使用附件的 `(createdAt, id)` cursor。
+
+**Response** (200)
+```json
+{
+  "attachments": [
+    {
+      "id": "uuid",
+      "messageId": "uuid",
+      "uploaderId": "uuid",
+      "kind": "image|video|audio|file",
+      "fileName": "name.png",
+      "mimeType": "image/png",
+      "size": 12345,
+      "url": "/uploads/2026-06-13/file.png",
+      "createdAt": "timestamp",
+      "uploader": {
+        "id": "uuid",
+        "username": "string",
+        "avatar": null
+      },
+      "message": {
+        "id": "uuid",
+        "conversationId": "uuid",
+        "createdAt": "timestamp",
+        "sender": {
+          "id": "uuid",
+          "username": "string",
+          "avatar": null
+        }
+      }
+    }
+  ],
+  "hasMore": false
+}
+```
+
 ### POST /api/messages/:messageId/forward
 将一条可访问、未删除的消息转发到目标会话。
 

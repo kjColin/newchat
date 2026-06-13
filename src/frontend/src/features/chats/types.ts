@@ -34,6 +34,23 @@ export type Attachment = {
   url: string;
   thumbnailUrl?: string | null;
   createdAt: string;
+  uploader?: {
+    id: string;
+    username: string;
+    avatar?: string | null;
+  };
+  message?: {
+    id: string;
+    content: string;
+    type: string;
+    conversationId: string;
+    createdAt: string;
+    sender?: {
+      id: string;
+      username: string;
+      avatar?: string | null;
+    };
+  } | null;
 };
 
 export type MessageReference = {
@@ -81,6 +98,11 @@ export type Conversation = {
 
 export type MessagesResponse = {
   messages: Message[];
+  hasMore: boolean;
+};
+
+export type AttachmentsResponse = {
+  attachments: Attachment[];
   hasMore: boolean;
 };
 

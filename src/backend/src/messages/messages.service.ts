@@ -146,6 +146,62 @@ export class MessagesService {
     return { messages };
   }
 
+  async listAttachments(
+    conversationId: string,
+    userId: string,
+    options: { kind?: string; limit?: number; beforeCreatedAt?: string; beforeId?: string } = {},
+  ) {
+    await this.ensureParticipant(conversationId, userId);
+
+    const limit = Math.min(Math.max(options.limit || 40, 1), 100);
+    const where: any = {
+      messageId: { not: null },
+      message: {
+        conversationId,
+        deletedAt: null,
+      },
+    };
+
+    if (options.kind) {
+      where.kind = options.kind;
+    }
+
+    if (options.beforeCreatedAt && options.beforeId) {
+      const beforeDate = new Date(options.beforeCreatedAt);
+      where.OR = [
+        { createdAt: { lt: beforeDate } },
+        { createdAt: beforeDate, id: { lt: options.beforeId } },
+      ];
+    }
+
+    const attachments = await this.prisma.attachment.findMany({
+      where,
+      orderBy: [
+        { createdAt: 'desc' },
+        { id: 'desc' },
+      ],
+      take: limit,
+      include: {
+        uploader: { select: { id: true, username: true, avatar: true } },
+        message: {
+          select: {
+            id: true,
+            content: true,
+            type: true,
+            conversationId: true,
+            createdAt: true,
+            sender: { select: { id: true, username: true, avatar: true } },
+          },
+        },
+      },
+    });
+
+    return {
+      attachments,
+      hasMore: attachments.length === limit,
+    };
+  }
+
   async findByConversation(
     conversationId: string,
     userId: string,
