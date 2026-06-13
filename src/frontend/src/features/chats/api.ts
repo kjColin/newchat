@@ -4,6 +4,7 @@ import type {
   AttachmentsResponse,
   ChannelDiscoveryItem,
   Conversation,
+  GroupDiscoveryItem,
   GroupMember,
   InviteLink,
   InvitePreview,
@@ -164,6 +165,18 @@ export async function updateChannel(conversationId: string, payload: { name?: st
 
 export async function getGroupMembers(conversationId: string) {
   const { data } = await apiClient.get<GroupMember[]>(`/groups/${conversationId}/members`);
+  return data;
+}
+
+export async function discoverGroups(query = '') {
+  const { data } = await apiClient.get<GroupDiscoveryItem[]>('/groups/discover', {
+    params: { q: query },
+  });
+  return data;
+}
+
+export async function joinPublicGroup(conversationId: string) {
+  const { data } = await apiClient.post<Conversation>(`/groups/${conversationId}/join`);
   return data;
 }
 

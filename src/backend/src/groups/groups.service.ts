@@ -74,6 +74,91 @@ export class GroupsService {
     return this.conversationsService.formatGroupConversation(updated, updated.conversation, updated._count.members);
   }
 
+  async discover(userId: string, query = '') {
+    const q = query.trim();
+    const groups = await this.prisma.group.findMany({
+      where: q
+        ? {
+          OR: [
+            { name: { contains: q, mode: 'insensitive' } },
+            { announcement: { contains: q, mode: 'insensitive' } },
+          ],
+        }
+        : undefined,
+      orderBy: [
+        { updatedAt: 'desc' },
+        { name: 'asc' },
+      ],
+      take: 30,
+      include: {
+        members: {
+          where: { userId },
+          select: { role: true },
+        },
+        _count: { select: { members: true } },
+      },
+    });
+
+    return groups.map(group => ({
+      id: group.id,
+      groupId: group.id,
+      conversationId: group.conversationId,
+      name: group.name,
+      announcement: group.announcement,
+      avatar: group.avatar,
+      memberCount: group._count.members,
+      isJoined: group.members.length > 0,
+      role: group.members[0]?.role || null,
+    }));
+  }
+
+  async joinPublic(conversationId: string, userId: string) {
+    const group = await this.prisma.group.findUnique({
+      where: { conversationId },
+      include: {
+        conversation: { include: { messages: { take: 1, orderBy: { createdAt: 'desc' } } } },
+        members: { where: { userId }, select: { role: true } },
+        _count: { select: { members: true } },
+      },
+    });
+    if (!group) throw new NotFoundException('Group not found');
+
+    if (group.members[0]) {
+      return this.conversationsService.formatGroupConversation(
+        group,
+        group.conversation,
+        group._count.members,
+      );
+    }
+
+    const joined = await this.prisma.$transaction(async prisma => {
+      await prisma.groupMember.create({
+        data: {
+          groupId: group.id,
+          userId,
+          role: 'member',
+        },
+      });
+
+      await prisma.userConversation.upsert({
+        where: { userId_conversationId: { userId, conversationId } },
+        update: { archivedAt: null },
+        create: { userId, conversationId },
+      });
+
+      return prisma.group.findUnique({
+        where: { id: group.id },
+        include: {
+          conversation: { include: { messages: { take: 1, orderBy: { createdAt: 'desc' } } } },
+          _count: { select: { members: true } },
+        },
+      });
+    });
+
+    if (!joined) throw new NotFoundException('Group not found');
+    return this.conversationsService.formatGroupConversation(joined, joined.conversation, joined._count.members);
+  }
+
   async getMembers(conversationId: string, userId: string) {
     const group = await this.getGroupForParticipant(conversationId, userId);
 
@@ -131,9 +216,9 @@ export class GroupsService {
       await prisma.groupMember.delete({
         where: { userId_groupId: { userId: memberId, groupId: group.id } },
       });
-      await prisma.userConversation.delete({
-        where: { userId_conversationId: { userId: memberId, conversationId } },
-      }).catch(() => undefined);
+      await prisma.userConversation.deleteMany({
+        where: { userId: memberId, conversationId },
+      });
     });
 
     return this.getMembers(conversationId, requesterId);

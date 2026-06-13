@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Patch, Delete, Param, Body, UseGuards, Request } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Delete, Param, Body, Query, UseGuards, Request } from '@nestjs/common';
 import { GroupsService } from './groups.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { ConversationsService } from '../conversations/conversations.service';
@@ -31,6 +31,16 @@ export class GroupsController {
   @Post('invites/:code/join')
   async joinByInvite(@Request() req: any, @Param('code') code: string) {
     return this.groupsService.joinByInvite(code, req.user.userId);
+  }
+
+  @Get('discover')
+  async discover(@Request() req: any, @Query('q') query = '') {
+    return this.groupsService.discover(req.user.userId, query);
+  }
+
+  @Post(':conversationId/join')
+  async joinPublic(@Request() req: any, @Param('conversationId') conversationId: string) {
+    return this.groupsService.joinPublic(conversationId, req.user.userId);
   }
 
   @Patch(':conversationId/settings')

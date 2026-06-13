@@ -172,6 +172,18 @@ export type ChannelDiscoveryItem = {
   role?: 'owner' | 'admin' | 'subscriber' | null;
 };
 
+export type GroupDiscoveryItem = {
+  id: string;
+  groupId: string;
+  conversationId: string;
+  name: string;
+  announcement?: string | null;
+  avatar?: string | null;
+  memberCount: number;
+  isJoined: boolean;
+  role?: 'owner' | 'admin' | 'member' | null;
+};
+
 export type InviteLink = {
   id: string;
   groupId: string;

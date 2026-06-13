@@ -508,6 +508,34 @@
 ### DELETE /api/groups/:conversationId/members/:userId
 移除群成员。成员可自行退出，owner/admin 可移除普通成员；owner 不可被移除。
 
+### GET /api/groups/discover
+按群名称或公告搜索可发现群，并返回当前用户加入状态。
+
+**Query**: `?q=<keyword>`
+
+**Response** (200)
+```json
+[
+  {
+    "id": "uuid",
+    "groupId": "uuid",
+    "conversationId": "uuid",
+    "name": "string",
+    "announcement": "string|null",
+    "avatar": null,
+    "memberCount": 12,
+    "isJoined": false,
+    "role": null
+  }
+]
+```
+
+### POST /api/groups/:conversationId/join
+加入可发现群。已在群内时返回现有 group conversation，不会重复创建成员关系。
+
+**Response** (201)
+返回 group conversation 对象，结构与 `GET /api/conversations` 中群会话一致。
+
 ### GET /api/groups/:conversationId/invites
 获取当前群的邀请链接列表，要求当前用户为 owner 或 admin。
 

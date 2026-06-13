@@ -4,7 +4,7 @@ import { Avatar } from '../../../shared/components/Avatar';
 import { formatConversationTime } from '../../../shared/utils/time';
 import type { User } from '../../auth/types';
 import type { BlockedUserEntry, ContactEntry, SearchUser } from '../../users/types';
-import type { ChannelDiscoveryItem, Conversation } from '../types';
+import type { ChannelDiscoveryItem, Conversation, GroupDiscoveryItem } from '../types';
 
 type ConversationListProps = {
   currentUser: User;
@@ -13,6 +13,7 @@ type ConversationListProps = {
   activeConversationId?: string;
   search: string;
   users: SearchUser[];
+  groupResults: GroupDiscoveryItem[];
   channelResults: ChannelDiscoveryItem[];
   contacts: ContactEntry[];
   blockedUsers: BlockedUserEntry[];
@@ -20,7 +21,7 @@ type ConversationListProps = {
   error: string;
   inviteInput: string;
   joiningInvite: boolean;
-  channelActionLoading: string;
+  discoveryActionLoading: string;
   onSearchChange: (value: string) => void;
   onInviteInputChange: (value: string) => void;
   onJoinInvite: () => void;
@@ -30,6 +31,8 @@ type ConversationListProps = {
   onRemoveContact: (user: SearchUser) => void;
   onBlockUser: (user: SearchUser) => void;
   onUnblockUser: (user: SearchUser) => void;
+  onJoinGroup: (group: GroupDiscoveryItem) => void;
+  onOpenJoinedGroup: (group: GroupDiscoveryItem) => void;
   onSubscribeChannel: (channel: ChannelDiscoveryItem) => void;
   onUnsubscribeChannel: (channel: ChannelDiscoveryItem) => void;
   onOpenCreateGroup: () => void;
@@ -48,6 +51,7 @@ export function ConversationList({
   activeConversationId,
   search,
   users,
+  groupResults,
   channelResults,
   contacts,
   blockedUsers,
@@ -55,7 +59,7 @@ export function ConversationList({
   error,
   inviteInput,
   joiningInvite,
-  channelActionLoading,
+  discoveryActionLoading,
   onSearchChange,
   onInviteInputChange,
   onJoinInvite,
@@ -65,6 +69,8 @@ export function ConversationList({
   onRemoveContact,
   onBlockUser,
   onUnblockUser,
+  onJoinGroup,
+  onOpenJoinedGroup,
   onSubscribeChannel,
   onUnsubscribeChannel,
   onOpenCreateGroup,
@@ -201,7 +207,7 @@ export function ConversationList({
                       className="mini-icon-button"
                       type="button"
                       onClick={() => onUnsubscribeChannel(channel)}
-                      disabled={channelActionLoading === channel.conversationId || channel.role === 'owner'}
+                      disabled={discoveryActionLoading === channel.conversationId || channel.role === 'owner'}
                       title={channel.role === 'owner' ? 'Owner cannot leave' : 'Leave channel'}
                     >
                       <LogOut size={14} />
@@ -211,10 +217,48 @@ export function ConversationList({
                       className="mini-icon-button"
                       type="button"
                       onClick={() => onSubscribeChannel(channel)}
-                      disabled={channelActionLoading === channel.conversationId}
+                      disabled={discoveryActionLoading === channel.conversationId}
                       title="Subscribe"
                     >
                       <Radio size={14} />
+                    </button>
+                  )}
+                </span>
+              </div>
+            ))}
+          </section>
+        )}
+
+        {groupResults.length > 0 && (
+          <section className="search-results">
+            <div className="section-label">Groups</div>
+            {groupResults.map(group => (
+              <div className="conversation-row" key={group.id}>
+                <Avatar name={group.name} src={group.avatar} />
+                <span className="conversation-main">
+                  <strong>{group.name}</strong>
+                  <small>{group.announcement || `${group.memberCount} members`}</small>
+                </span>
+                <span className="user-actions">
+                  {group.isJoined ? (
+                    <button
+                      className="mini-icon-button"
+                      type="button"
+                      onClick={() => onOpenJoinedGroup(group)}
+                      disabled={discoveryActionLoading === group.conversationId}
+                      title="Open group"
+                    >
+                      <MessageCircle size={14} />
+                    </button>
+                  ) : (
+                    <button
+                      className="mini-icon-button"
+                      type="button"
+                      onClick={() => onJoinGroup(group)}
+                      disabled={discoveryActionLoading === group.conversationId}
+                      title="Join group"
+                    >
+                      <Users size={14} />
                     </button>
                   )}
                 </span>
@@ -270,7 +314,7 @@ export function ConversationList({
         )}
 
         <section>
-          {(users.length > 0 || channelResults.length > 0 || contacts.length > 0 || blockedUsers.length > 0) && <div className="section-label">Chats</div>}
+          {(users.length > 0 || groupResults.length > 0 || channelResults.length > 0 || contacts.length > 0 || blockedUsers.length > 0) && <div className="section-label">Chats</div>}
           {!loading && filteredConversations.length === 0 ? (
             <div className="empty-list">
               <Users size={28} />

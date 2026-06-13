@@ -10,6 +10,7 @@ import {
   createGroupInviteLink,
   deleteMessage,
   discoverChannels,
+  discoverGroups,
   editMessage,
   addGroupMembers,
   forwardMessage,
@@ -22,6 +23,7 @@ import {
   getMessages,
   getPinnedMessages,
   joinGroupByInvite,
+  joinPublicGroup,
   markConversationRead,
   pinMessage,
   removeGroupMember,
@@ -43,7 +45,7 @@ import { MessageComposer } from '../features/chats/components/MessageComposer';
 import { MessageList } from '../features/chats/components/MessageList';
 import { connectChatSocket, joinConversation, startTyping, stopTyping } from '../features/chats/socket';
 import type { ChatSocket } from '../features/chats/socket';
-import type { Attachment, ChannelDiscoveryItem, Conversation, GroupMember, InviteLink, LinkPreview, Message, PinnedMessage } from '../features/chats/types';
+import type { Attachment, ChannelDiscoveryItem, Conversation, GroupDiscoveryItem, GroupMember, InviteLink, LinkPreview, Message, PinnedMessage } from '../features/chats/types';
 import { CreateChannelModal } from '../features/channels/components/CreateChannelModal';
 import { CreateGroupModal } from '../features/groups/components/CreateGroupModal';
 import { ProfileModal } from '../features/users/components/ProfileModal';
@@ -165,8 +167,9 @@ export function ChatPage() {
   const [searchingMessages, setSearchingMessages] = useState(false);
   const [search, setSearch] = useState('');
   const [searchResults, setSearchResults] = useState<SearchUser[]>([]);
+  const [groupResults, setGroupResults] = useState<GroupDiscoveryItem[]>([]);
   const [channelResults, setChannelResults] = useState<ChannelDiscoveryItem[]>([]);
-  const [channelActionLoading, setChannelActionLoading] = useState('');
+  const [discoveryActionLoading, setDiscoveryActionLoading] = useState('');
   const [contacts, setContacts] = useState<ContactEntry[]>([]);
   const [blockedUsers, setBlockedUsers] = useState<BlockedUserEntry[]>([]);
   const [mobileConversationOpen, setMobileConversationOpen] = useState(false);
@@ -528,18 +531,22 @@ export function ChatPage() {
         const query = search.trim();
         if (!query) {
           setSearchResults([]);
+          setGroupResults([]);
           setChannelResults([]);
           return;
         }
 
-        const [nextUsers, nextChannels] = await Promise.all([
+        const [nextUsers, nextGroups, nextChannels] = await Promise.all([
           searchUsers(query),
+          discoverGroups(query),
           discoverChannels(query),
         ]);
         setSearchResults(nextUsers);
+        setGroupResults(nextGroups);
         setChannelResults(nextChannels);
       } catch {
         setSearchResults([]);
+        setGroupResults([]);
         setChannelResults([]);
       }
     }, 250);
@@ -954,7 +961,7 @@ export function ChatPage() {
   };
 
   const handleSubscribeChannel = async (channel: ChannelDiscoveryItem) => {
-    setChannelActionLoading(channel.conversationId);
+    setDiscoveryActionLoading(channel.conversationId);
     setSidebarError('');
     try {
       const conversation = await subscribeChannel(channel.conversationId);
@@ -968,12 +975,12 @@ export function ChatPage() {
     } catch (error: any) {
       setSidebarError(error.response?.data?.message || 'Could not subscribe to channel');
     } finally {
-      setChannelActionLoading('');
+      setDiscoveryActionLoading('');
     }
   };
 
   const handleUnsubscribeChannel = async (channel: ChannelDiscoveryItem) => {
-    setChannelActionLoading(channel.conversationId);
+    setDiscoveryActionLoading(channel.conversationId);
     setSidebarError('');
     try {
       await unsubscribeChannel(channel.conversationId);
@@ -991,8 +998,37 @@ export function ChatPage() {
     } catch (error: any) {
       setSidebarError(error.response?.data?.message || 'Could not leave channel');
     } finally {
-      setChannelActionLoading('');
+      setDiscoveryActionLoading('');
     }
+  };
+
+  const handleJoinGroup = async (group: GroupDiscoveryItem) => {
+    setDiscoveryActionLoading(group.conversationId);
+    setSidebarError('');
+    try {
+      const conversation = await joinPublicGroup(group.conversationId);
+      setConversations(prev => sortConversations(upsertConversation(prev, conversation)));
+      setGroupResults(prev => prev.map(item =>
+        item.conversationId === group.conversationId
+          ? { ...item, isJoined: true, role: conversation.role as GroupDiscoveryItem['role'], memberCount: conversation.memberCount }
+          : item
+      ));
+      await selectConversation(conversation);
+    } catch (error: any) {
+      setSidebarError(error.response?.data?.message || 'Could not join group');
+    } finally {
+      setDiscoveryActionLoading('');
+    }
+  };
+
+  const handleOpenJoinedGroup = async (group: GroupDiscoveryItem) => {
+    const conversation = conversations.find(item => item.id === group.conversationId);
+    if (conversation) {
+      await selectConversation(conversation);
+      return;
+    }
+
+    await handleJoinGroup(group);
   };
 
   const logout = () => {
@@ -1265,6 +1301,7 @@ export function ChatPage() {
         activeConversationId={activeConversation?.id}
         search={search}
         users={searchResults}
+        groupResults={groupResults}
         channelResults={channelResults}
         contacts={contacts}
         blockedUsers={blockedUsers}
@@ -1272,7 +1309,7 @@ export function ChatPage() {
         error={sidebarError}
         inviteInput={inviteInput}
         joiningInvite={joiningInvite}
-        channelActionLoading={channelActionLoading}
+        discoveryActionLoading={discoveryActionLoading}
         notificationSlot={(
           <NotificationMenu
             open={notificationsOpen}
@@ -1295,6 +1332,8 @@ export function ChatPage() {
         onRemoveContact={handleRemoveContact}
         onBlockUser={handleBlockUser}
         onUnblockUser={handleUnblockUser}
+        onJoinGroup={handleJoinGroup}
+        onOpenJoinedGroup={handleOpenJoinedGroup}
         onSubscribeChannel={handleSubscribeChannel}
         onUnsubscribeChannel={handleUnsubscribeChannel}
         onOpenCreateGroup={() => setCreateGroupOpen(true)}
