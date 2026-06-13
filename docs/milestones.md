@@ -33,6 +33,7 @@
 | WebSocket 实时消息 | backend | ✅ |
 | 聊天界面 | frontend | ✅ |
 | 群组列表 | frontend | ✅ |
+| 加载更早消息/未读分割线/跳转最新 | frontend | ✅ |
 | 单元测试 | qa-audit | ⏳ |
 | 集成测试 | qa-audit | ⏳ |
 

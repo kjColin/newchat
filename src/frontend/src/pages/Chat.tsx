@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { MessageCircle } from 'lucide-react';
+import { ArrowDown, MessageCircle } from 'lucide-react';
 import { authStore } from '../features/auth/auth-store';
 import type { User } from '../features/auth/types';
 import {
@@ -60,6 +60,11 @@ function createClientId() {
   return `${Date.now().toString(36)}-${random}`;
 }
 
+function isNearBottom(element: HTMLElement | null) {
+  if (!element) return true;
+  return element.scrollHeight - element.scrollTop - element.clientHeight < 96;
+}
+
 async function copyTextToClipboard(value: string) {
   if (navigator.clipboard?.writeText) {
     await navigator.clipboard.writeText(value);
@@ -114,6 +119,10 @@ export function ChatPage() {
   const [socket, setSocket] = useState<ChatSocket | null>(null);
   const [loadingConversations, setLoadingConversations] = useState(true);
   const [loadingMessages, setLoadingMessages] = useState(false);
+  const [loadingEarlier, setLoadingEarlier] = useState(false);
+  const [hasMoreMessages, setHasMoreMessages] = useState(false);
+  const [unreadMarkerId, setUnreadMarkerId] = useState<string | null>(null);
+  const [showJumpLatest, setShowJumpLatest] = useState(false);
   const [sending, setSending] = useState(false);
   const [sidebarError, setSidebarError] = useState('');
   const [messageError, setMessageError] = useState('');
@@ -149,6 +158,7 @@ export function ChatPage() {
   const activeConversationId = useRef<string | null>(null);
   const handledInviteCode = useRef<string | null>(null);
   const typingTimer = useRef<number | null>(null);
+  const messageListRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
 
   const selectConversation = useCallback(async (conversation: Conversation) => {
@@ -158,6 +168,9 @@ export function ChatPage() {
     setPendingAttachments([]);
     setMessageSearch('');
     setMessageSearchResults([]);
+    setHasMoreMessages(false);
+    setUnreadMarkerId(null);
+    setShowJumpLatest(false);
     setDetailsOpen(false);
     setMobileConversationOpen(true);
     setLoadingMessages(true);
@@ -167,12 +180,27 @@ export function ChatPage() {
     try {
       const data = await getMessages(conversation.id);
       setMessages(data.messages);
+      setHasMoreMessages(data.hasMore);
+      const marker = conversation.lastReadAt
+        ? data.messages.find(message =>
+            message.senderId !== currentUser.id &&
+            new Date(message.createdAt) > new Date(conversation.lastReadAt as string)
+          )
+        : null;
+      setUnreadMarkerId(marker?.id || null);
+      setShowJumpLatest(Boolean(marker));
       const read = await markConversationRead(conversation.id).catch(() => null);
+      setActiveConversation(prev =>
+        prev?.id === conversation.id ? { ...prev, unreadCount: 0, lastReadAt: read?.lastReadAt || prev.lastReadAt } : prev
+      );
       setConversations(prev => prev.map(item =>
         item.id === conversation.id ? { ...item, unreadCount: 0, lastReadAt: read?.lastReadAt || item.lastReadAt } : item
       ));
     } catch (error: any) {
       setMessages([]);
+      setHasMoreMessages(false);
+      setUnreadMarkerId(null);
+      setShowJumpLatest(false);
       setMessageError(error.response?.data?.message || 'Could not load messages');
     } finally {
       setLoadingMessages(false);
@@ -242,7 +270,16 @@ export function ChatPage() {
       })));
 
       if (activeConversationId.current === message.conversationId) {
+        const wasNearBottom = isNearBottom(messageListRef.current);
         setMessages(prev => prev.some(existing => existing.id === message.id) ? prev : [...prev, message]);
+        setActiveConversation(prev =>
+          prev?.id === message.conversationId
+            ? { ...prev, lastMessage: message, lastActivityAt: message.createdAt, unreadCount: 0 }
+            : prev
+        );
+        if (!wasNearBottom && message.senderId !== currentUser?.id) {
+          setShowJumpLatest(true);
+        }
         if (message.senderId !== currentUser?.id) {
           markConversationRead(message.conversationId).catch(() => undefined);
         }
@@ -365,8 +402,10 @@ export function ChatPage() {
   }, [memberSearch]);
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages.length]);
+    if (!loadingEarlier && isNearBottom(messageListRef.current)) {
+      bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [messages.length, loadingEarlier]);
 
   if (!currentUser) return null;
 
@@ -398,6 +437,11 @@ export function ChatPage() {
             ? { ...conversation, lastMessage: message, unreadCount: 0, lastActivityAt: message.createdAt }
             : conversation
         )));
+        setActiveConversation(prev =>
+          prev?.id === message.conversationId
+            ? { ...prev, lastMessage: message, unreadCount: 0, lastActivityAt: message.createdAt }
+            : prev
+        );
         setReplyToMessage(null);
         setPendingAttachments([]);
       }
@@ -512,6 +556,60 @@ export function ChatPage() {
     } finally {
       setSearchingMessages(false);
     }
+  };
+
+  const loadEarlierMessages = async () => {
+    if (!activeConversation || messages.length === 0 || loadingEarlier || !hasMoreMessages) return;
+
+    const first = messages[0];
+    const list = messageListRef.current;
+    const previousHeight = list?.scrollHeight || 0;
+    setLoadingEarlier(true);
+    setMessageError('');
+
+    try {
+      const data = await getMessages(activeConversation.id, {
+        beforeCreatedAt: first.createdAt,
+        beforeId: first.id,
+      });
+      setMessages(prev => {
+        const existing = new Set(prev.map(message => message.id));
+        const older = data.messages.filter(message => !existing.has(message.id));
+        return [...older, ...prev];
+      });
+      setHasMoreMessages(data.hasMore);
+
+      window.setTimeout(() => {
+        if (!list) return;
+        list.scrollTop = list.scrollHeight - previousHeight + list.scrollTop;
+      }, 0);
+    } catch (error: any) {
+      setMessageError(error.response?.data?.message || 'Could not load earlier messages');
+    } finally {
+      setLoadingEarlier(false);
+    }
+  };
+
+  const handleMessageScroll = () => {
+    const nearBottom = isNearBottom(messageListRef.current);
+    setShowJumpLatest(!nearBottom);
+    if (nearBottom) {
+      setUnreadMarkerId(null);
+    }
+  };
+
+  const jumpToLatest = async () => {
+    if (!activeConversation) return;
+    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+    setShowJumpLatest(false);
+    setUnreadMarkerId(null);
+    const read = await markConversationRead(activeConversation.id).catch(() => null);
+    setActiveConversation(prev =>
+      prev?.id === activeConversation.id ? { ...prev, unreadCount: 0, lastReadAt: read?.lastReadAt || prev.lastReadAt } : prev
+    );
+    setConversations(prev => prev.map(item =>
+      item.id === activeConversation.id ? { ...item, unreadCount: 0, lastReadAt: read?.lastReadAt || item.lastReadAt } : item
+    ));
   };
 
   const jumpToSearchResult = (message: Message) => {
@@ -795,14 +893,26 @@ export function ChatPage() {
               currentUser={currentUser}
               messages={messages}
               loading={loadingMessages}
+              loadingEarlier={loadingEarlier}
+              hasMore={hasMoreMessages}
               error={messageError}
+              unreadMarkerId={unreadMarkerId}
+              listRef={messageListRef}
               bottomRef={bottomRef}
+              onLoadEarlier={loadEarlierMessages}
+              onScroll={handleMessageScroll}
               onEdit={handleEdit}
               onDelete={handleDelete}
               onReact={handleReact}
               onReply={handleReply}
               onForward={handleForward}
             />
+            {(showJumpLatest || (activeConversation.unreadCount || 0) > 0) && (
+              <button className="jump-latest-button" type="button" onClick={jumpToLatest} title="Jump to latest">
+                <ArrowDown size={16} />
+                {(activeConversation.unreadCount || 0) > 0 && <span>{activeConversation.unreadCount}</span>}
+              </button>
+            )}
             <MessageComposer
               value={draft}
               disabled={loadingMessages}
