@@ -1,15 +1,19 @@
-import { Injectable, NotFoundException, ForbiddenException, BadRequestException, InternalServerErrorException } from '@nestjs/common';
+import { Injectable, NotFoundException, ForbiddenException, BadRequestException, InternalServerErrorException, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { MessagesGateway } from './messages.gateway';
 import { CreateMessageDto } from './dto/message.dto';
+import { NotificationsService } from '../notifications/notifications.service';
 
 const URL_PATTERN = /https?:\/\/[^\s<>"')\]]+/gi;
 
 @Injectable()
 export class MessagesService {
+  private readonly logger = new Logger(MessagesService.name);
+
   constructor(
     private prisma: PrismaService,
     private messagesGateway: MessagesGateway,
+    private notificationsService: NotificationsService,
   ) {}
 
   async create(conversationId: string, senderId: string, data: CreateMessageDto) {
@@ -110,6 +114,15 @@ export class MessagesService {
     });
 
     this.messagesGateway.emitMessage(message);
+    try {
+      const notifications = await this.notificationsService.createForMessage(message);
+      notifications.forEach(notification => {
+        this.messagesGateway.emitNotification(notification.userId, notification);
+      });
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : String(error);
+      this.logger.warn(`Could not create notifications: ${reason}`);
+    }
     return message;
   }
 

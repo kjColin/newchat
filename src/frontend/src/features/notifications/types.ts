@@ -1,6 +1,7 @@
 export type NotificationItem = {
   id: string;
   conversationId: string;
+  messageId?: string | null;
   title: string;
   body: string;
   createdAt: string;

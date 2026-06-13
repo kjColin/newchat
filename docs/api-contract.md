@@ -716,6 +716,71 @@
 
 ---
 
+## 通知 API
+
+通知由服务端在消息创建后写入，排除发送者本人，并遵守会话免打扰设置。前端启动时通过 REST 恢复通知列表，在线时通过 `notification` Socket 事件增量更新。
+
+### GET /api/notifications
+获取当前用户最近通知。
+
+**Response** (200)
+```json
+[
+  {
+    "id": "uuid",
+    "userId": "uuid",
+    "conversationId": "uuid",
+    "messageId": "uuid|null",
+    "title": "string",
+    "body": "string",
+    "createdAt": "timestamp",
+    "read": false
+  }
+]
+```
+
+### PATCH /api/notifications/:notificationId/read
+标记单条通知已读。
+
+**Response** (200)
+```json
+{
+  "updated": 1
+}
+```
+
+### POST /api/notifications/conversations/:conversationId/read
+标记当前用户在指定会话下的所有通知已读。
+
+**Response** (200)
+```json
+{
+  "updated": 3
+}
+```
+
+### POST /api/notifications/read-all
+标记当前用户全部通知已读。
+
+**Response** (200)
+```json
+{
+  "updated": 10
+}
+```
+
+### DELETE /api/notifications
+清空当前用户通知列表。
+
+**Response** (200)
+```json
+{
+  "deleted": 10
+}
+```
+
+---
+
 ## WebSocket Events
 
 ### 连接
@@ -743,10 +808,11 @@ socket.emit('typing:stop', { conversationId: 'uuid' })
 | `message:deleted` | 消息被删除 |
 | `message:reaction` | 表情反应变化 |
 | `message:read` | 已读状态变化 |
+| `notification` | 当前用户的新站内通知 |
 | `typing` | 输入状态变化 |
 | `presence:update` | 在线状态变化 |
 
-前端基于 `message` 事件生成站内通知和浏览器通知：仅当消息来自其他用户且不属于当前打开会话时提醒；点击通知会切换到对应会话并标记该通知已读。
+前端基于 `notification` 事件维护站内通知列表，并基于 `message` 事件触发浏览器通知：仅当消息来自其他用户且不属于当前打开会话时提醒；点击通知会切换到对应会话并标记该通知已读。
 
 ---
 

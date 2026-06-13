@@ -134,6 +134,13 @@ export class MessagesGateway implements OnGatewayConnection, OnGatewayDisconnect
     this.server?.to(this.roomName(payload.conversationId)).emit('message:pinned', payload);
   }
 
+  emitNotification(userId: string, notification: any) {
+    const socketIds = this.activeSocketsByUser.get(userId);
+    socketIds?.forEach(socketId => {
+      this.server?.to(socketId).emit('notification', notification);
+    });
+  }
+
   private async emitTyping(client: Socket, conversationId: string | undefined, isTyping: boolean) {
     const userId = client.data.userId;
     if (!userId || !conversationId) return;

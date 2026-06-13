@@ -162,7 +162,7 @@ UI Event
 | `ChannelsModule` | 频道资料、频道成员、频道发言权限 |
 | `FilesModule` | 文件上传、下载、附件元数据、缩略图 |
 | `PresenceModule` | 在线状态、多设备连接、最后在线时间 |
-| `NotificationsModule` | 站内通知、Web Push、未读提醒 |
+| `NotificationsModule` | 站内通知持久化、实时通知投递、Web Push 扩展点 |
 | `SearchModule` | 用户、会话、消息全文搜索 |
 
 当前代码中会话列表、单聊创建和会话设置已由 `ConversationsService` 负责；`GroupsService` 保留群资料、成员和邀请链接，`ChannelsService` 负责频道资料、成员和发言权限。
@@ -212,6 +212,7 @@ PostgreSQL
 | `InviteLink` | 群邀请链接、撤销状态、使用次数 |
 | `Contact` | 用户联系人关系和别名 |
 | `BlockList` | 用户拉黑关系 |
+| `Notification` | 用户站内通知，关联会话和可选消息，保存已读状态 |
 
 ### 7.2 建议新增模型
 
@@ -278,6 +279,11 @@ REST API 负责可重放、可校验的命令和查询。
 | `DELETE` | `/api/channels/:conversationId/subscribe` | 退订频道 |
 | `GET` | `/api/channels/:conversationId/members` | 频道订阅者列表 |
 | `POST` | `/api/files` | 上传附件 |
+| `GET` | `/api/notifications` | 当前用户通知列表 |
+| `PATCH` | `/api/notifications/:notificationId/read` | 标记单条通知已读 |
+| `POST` | `/api/notifications/conversations/:conversationId/read` | 标记会话通知已读 |
+| `POST` | `/api/notifications/read-all` | 标记全部通知已读 |
+| `DELETE` | `/api/notifications` | 清空通知 |
 
 ### 8.2 WebSocket Events
 
@@ -293,11 +299,12 @@ Socket 事件负责实时通知，不作为唯一数据源。
 | `message:deleted` | Server -> Client | 消息被删除 |
 | `message:reaction` | Server -> Client | 表情反应变化 |
 | `message:read` | Server -> Client | 已读状态变化 |
+| `notification` | Server -> Client | 当前用户的新站内通知 |
 | `presence:update` | Server -> Client | 用户在线状态变化 |
 | `conversation:updated` | Server -> Client | 会话设置或群信息变化 |
 | `group:membersUpdated` | Server -> Client | 群成员变化 |
 
-前端会基于 `message` 事件为非当前会话、非本人发送的新消息生成站内通知；浏览器通知使用标准 Notification API，由用户授权后启用。
+服务端会基于新消息写入 `Notification`，并向在线接收者推送 `notification` 事件。前端启动后先通过 REST 恢复通知列表，再通过 Socket 增量更新；浏览器通知使用标准 Notification API，由用户授权后启用。
 
 ## 9. 核心流程
 
@@ -321,6 +328,12 @@ PostgreSQL
   ▼
 MessagesGateway
   │ emit "message" to conversation room
+  │
+  ▼
+NotificationsService
+  │ create Notification for non-sender participants
+  │ skip muted conversations
+  │ emit "notification" to online recipients
   ▼
 Clients
 ```
@@ -474,7 +487,7 @@ Data
 - `.env`、`dist`、`node_modules`、备份文件出现在工作区，版本管理边界不清。
 - JWT 默认 secret 为 `secret`，生产环境存在安全风险。
 - 自动化测试覆盖不足，当前主要依赖构建和手工验证。
-- 当前通知为前端内存态，刷新后不保留；生产阶段应增加服务端通知模型和 Web Push。
+- 站内通知已持久化；Web Push、通知保留策略和批量清理仍待生产化。
 - `Chat.tsx` 状态过多，继续加功能会难以维护。
 
 ## 15. 近期落地建议
@@ -484,7 +497,7 @@ Data
 1. 清理工程边界和配置安全。
 2. 扩展 e2e 覆盖：文件消息、邀请入群、频道、隐私设置。
 3. 将 `Chat.tsx` 拆为会话、消息、详情、Socket 等 hooks。
-4. 落地服务端通知持久化和 Web Push。
+4. 扩展 Web Push、通知保留策略和批量清理。
 5. 规划 Redis adapter、对象存储和消息队列接入。
 
 这条路线能在不推翻现有 NestJS + React 架构的前提下，把当前应用从基础聊天应用平滑演进为更接近 Telegram 的实时通信产品。

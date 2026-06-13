@@ -4,6 +4,7 @@ import { MessagesService } from './messages.service';
 import { MessagesController } from './messages.controller';
 import { MessagesGateway } from './messages.gateway';
 import { getJwtSecret } from '../common/config';
+import { NotificationsModule } from '../notifications/notifications.module';
 
 @Module({
   imports: [
@@ -11,6 +12,7 @@ import { getJwtSecret } from '../common/config';
       secret: getJwtSecret(),
       signOptions: { expiresIn: '7d' },
     }),
+    NotificationsModule,
   ],
   providers: [MessagesService, MessagesGateway],
   controllers: [MessagesController],

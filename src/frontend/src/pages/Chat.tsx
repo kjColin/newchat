@@ -64,6 +64,13 @@ import type { BlockedUserEntry, ContactEntry, SearchUser } from '../features/use
 import { getBrowserNotificationState, requestBrowserNotificationPermission, showBrowserNotification } from '../features/notifications/browser-notifications';
 import { NotificationMenu } from '../features/notifications/components/NotificationMenu';
 import type { BrowserNotificationState, NotificationItem } from '../features/notifications/types';
+import {
+  clearNotifications as clearStoredNotifications,
+  getNotifications,
+  markAllNotificationsRead as markAllStoredNotificationsRead,
+  markConversationNotificationsRead,
+  markNotificationRead,
+} from '../features/notifications/api';
 import './Chat.css';
 
 function upsertConversation(list: Conversation[], conversation: Conversation) {
@@ -256,6 +263,7 @@ export function ChatPage() {
     setNotifications(prev => prev.map(notification =>
       notification.conversationId === conversation.id ? { ...notification, read: true } : notification
     ));
+    markConversationNotificationsRead(conversation.id).catch(() => undefined);
     setLoadingMessages(true);
     setMessageError('');
     joinConversation(socket, conversation.id);
@@ -293,23 +301,10 @@ export function ChatPage() {
     }
   }, [socket]);
 
-  const createMessageNotification = useCallback((message: Message) => {
+  const showMessageNotification = useCallback((message: Message) => {
     const conversation = conversationsRef.current.find(item => item.id === message.conversationId);
     const title = conversation?.name || message.sender?.username || 'New message';
     const body = formatNotificationBody(message);
-    const item: NotificationItem = {
-      id: message.id,
-      conversationId: message.conversationId,
-      title,
-      body,
-      createdAt: message.createdAt,
-      read: false,
-    };
-
-    setNotifications(prev => {
-      const next = [item, ...prev.filter(notification => notification.id !== item.id)];
-      return next.slice(0, 30);
-    });
 
     showBrowserNotification(title, body, () => {
       const target = conversationsRef.current.find(conversation => conversation.id === message.conversationId);
@@ -422,8 +417,20 @@ export function ChatPage() {
           markConversationRead(message.conversationId).catch(() => undefined);
         }
       } else if (message.senderId !== currentUser?.id) {
-        createMessageNotification(message);
+        showMessageNotification(message);
       }
+    });
+    ws.on('notification', notification => {
+      const nextNotification = activeConversationId.current === notification.conversationId
+        ? { ...notification, read: true }
+        : notification;
+      if (nextNotification.read) {
+        markConversationNotificationsRead(notification.conversationId).catch(() => undefined);
+      }
+      setNotifications(prev => {
+        const next = [nextNotification, ...prev.filter(item => item.id !== notification.id)];
+        return next.slice(0, 30);
+      });
     });
     ws.on('message:updated', message => {
       setMessages(prev => prev.map(item => item.id === message.id ? message : item));
@@ -483,7 +490,7 @@ export function ChatPage() {
     return () => {
       ws.disconnect();
     };
-  }, [createMessageNotification, currentUser?.id]);
+  }, [showMessageNotification, currentUser?.id]);
 
   useEffect(() => {
     async function load() {
@@ -518,6 +525,12 @@ export function ChatPage() {
     }
 
     loadRelationships();
+  }, []);
+
+  useEffect(() => {
+    getNotifications()
+      .then(setNotifications)
+      .catch(() => setNotifications([]));
   }, []);
 
   useEffect(() => {
@@ -1109,6 +1122,7 @@ export function ChatPage() {
 
   const selectNotification = async (notification: NotificationItem) => {
     setNotifications(prev => prev.map(item => item.id === notification.id ? { ...item, read: true } : item));
+    markNotificationRead(notification.id).catch(() => undefined);
     const conversation = conversations.find(item => item.id === notification.conversationId);
     if (conversation) {
       await selectConversation(conversation);
@@ -1117,11 +1131,13 @@ export function ChatPage() {
 
   const markAllNotificationsRead = () => {
     setNotifications(prev => prev.map(notification => ({ ...notification, read: true })));
+    markAllStoredNotificationsRead().catch(() => undefined);
   };
 
   const clearNotifications = () => {
     setNotifications([]);
     setNotificationsOpen(false);
+    clearStoredNotifications().catch(() => undefined);
   };
 
   const handleTogglePinned = async (conversation: Conversation) => {
