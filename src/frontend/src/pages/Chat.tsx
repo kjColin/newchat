@@ -7,25 +7,15 @@ import {
   createChannel,
   createDirectConversation,
   createGroup,
-  createGroupInviteLink,
   discoverChannels,
   discoverGroups,
-  addGroupMembers,
-  getChannelMembers,
-  getConversationAttachments,
-  getConversationLinks,
-  getGroupInviteLinks,
-  getGroupMembers,
   getPinnedMessages,
   joinGroupByInvite,
   joinPublicGroup,
   markConversationRead,
   pinMessage,
-  removeGroupMember,
-  revokeGroupInviteLink,
   subscribeChannel,
   unsubscribeChannel,
-  updateGroup,
   unpinMessage,
 } from '../features/chats/api';
 import { ChatHeader } from '../features/chats/components/ChatHeader';
@@ -33,9 +23,10 @@ import { ConversationDetails } from '../features/chats/components/ConversationDe
 import { ConversationList } from '../features/chats/components/ConversationList';
 import { MessageComposer } from '../features/chats/components/MessageComposer';
 import { MessageList } from '../features/chats/components/MessageList';
-import type { Attachment, ChannelDiscoveryItem, Conversation, GroupDiscoveryItem, GroupMember, InviteLink, LinkPreview, Message, PinnedMessage } from '../features/chats/types';
+import type { Attachment, ChannelDiscoveryItem, Conversation, GroupDiscoveryItem, Message, PinnedMessage } from '../features/chats/types';
 import { useChatSocket } from '../features/chats/useChatSocket';
 import { useConversations } from '../features/chats/useConversations';
+import { useConversationDetails } from '../features/chats/useConversationDetails';
 import { useMessages } from '../features/chats/useMessages';
 import { CreateChannelModal } from '../features/channels/components/CreateChannelModal';
 import { CreateGroupModal } from '../features/groups/components/CreateGroupModal';
@@ -59,22 +50,6 @@ import './Chat.css';
 function isNearBottom(element: HTMLElement | null) {
   if (!element) return true;
   return element.scrollHeight - element.scrollTop - element.clientHeight < 96;
-}
-
-async function copyTextToClipboard(value: string) {
-  if (navigator.clipboard?.writeText) {
-    await navigator.clipboard.writeText(value);
-    return;
-  }
-
-  const textArea = document.createElement('textarea');
-  textArea.value = value;
-  textArea.style.position = 'fixed';
-  textArea.style.opacity = '0';
-  document.body.appendChild(textArea);
-  textArea.select();
-  document.execCommand('copy');
-  textArea.remove();
 }
 
 function parseInviteCode(value: string) {
@@ -140,22 +115,6 @@ export function ChatPage() {
   const [channelError, setChannelError] = useState('');
   const [creatingChannel, setCreatingChannel] = useState(false);
   const [typingUsers, setTypingUsers] = useState<Record<string, string[]>>({});
-  const [detailsOpen, setDetailsOpen] = useState(false);
-  const [members, setMembers] = useState<GroupMember[]>([]);
-  const [membersLoading, setMembersLoading] = useState(false);
-  const [detailsError, setDetailsError] = useState('');
-  const [detailsNotice, setDetailsNotice] = useState('');
-  const [mediaAttachments, setMediaAttachments] = useState<Attachment[]>([]);
-  const [fileAttachments, setFileAttachments] = useState<Attachment[]>([]);
-  const [linkPreviews, setLinkPreviews] = useState<LinkPreview[]>([]);
-  const [linkFilter, setLinkFilter] = useState<'all' | 'contact' | 'me'>('all');
-  const [attachmentsLoading, setAttachmentsLoading] = useState(false);
-  const [memberSearch, setMemberSearch] = useState('');
-  const [memberSearchResults, setMemberSearchResults] = useState<SearchUser[]>([]);
-  const [groupNameDraft, setGroupNameDraft] = useState('');
-  const [announcementDraft, setAnnouncementDraft] = useState('');
-  const [inviteLinks, setInviteLinks] = useState<InviteLink[]>([]);
-  const [inviteLoading, setInviteLoading] = useState(false);
   const [inviteInput, setInviteInput] = useState('');
   const [joiningInvite, setJoiningInvite] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
@@ -194,6 +153,44 @@ export function ChatPage() {
     applyConversationPatch,
     updateConversationSetting,
   } = useConversations();
+  const {
+    detailsOpen,
+    members,
+    membersLoading,
+    detailsError,
+    detailsNotice,
+    mediaAttachments,
+    fileAttachments,
+    linkPreviews,
+    linkFilter,
+    attachmentsLoading,
+    memberSearch,
+    memberSearchResults,
+    groupNameDraft,
+    announcementDraft,
+    inviteLinks,
+    inviteLoading,
+    setMemberSearch,
+    setMemberSearchResults,
+    setGroupNameDraft,
+    setAnnouncementDraft,
+    openDetails,
+    closeDetails,
+    resetDetails,
+    changeLinkFilter,
+    createInviteLink,
+    copyInviteLink,
+    revokeInviteLink,
+    saveGroupName,
+    saveAnnouncement,
+    addMember,
+    removeMember,
+    applyProfileUpdate: applyDetailsProfileUpdate,
+  } = useConversationDetails({
+    currentUser,
+    onConversationPatch: applyConversationPatch,
+    onMemberCountChange: applyMemberCount,
+  });
   const {
     messages,
     loadingMessages,
@@ -275,13 +272,11 @@ export function ChatPage() {
 
   const selectConversation = useCallback(async (conversation: Conversation) => {
     setActiveConversation(conversation);
-    setGroupNameDraft(conversation.name);
-    setAnnouncementDraft(conversation.announcement || '');
     setReplyToMessage(null);
     setPendingAttachments([]);
     resetMessages();
     setPinnedMessages([]);
-    setDetailsOpen(false);
+    resetDetails();
     setMobileConversationOpen(true);
     markConversationNotificationsLocalRead(conversation.id);
 
@@ -874,6 +869,7 @@ export function ChatPage() {
       setProfileSearchable(updated.searchable !== false);
       setProfileAllowDirectMessages(updated.allowDirectMessages !== false);
       applyProfileUpdate(updated);
+      applyDetailsProfileUpdate(updated);
       setPinnedMessages(prev => prev.map(pinned => ({
         ...pinned,
         pinnedBy: pinned.pinnedById === updated.id
@@ -883,9 +879,6 @@ export function ChatPage() {
           ? { ...pinned.message, sender: { ...(pinned.message.sender || {}), id: updated.id, username: updated.username, avatar: updated.avatar } }
           : pinned.message,
       })));
-      setMembers(prev => prev.map(member =>
-        member.userId === updated.id ? { ...member, user: { ...member.user, ...updated } } : member
-      ));
       setProfileNotice('Profile saved');
     } catch (error: any) {
       setProfileError(error.response?.data?.message || 'Could not update profile');
@@ -911,171 +904,36 @@ export function ChatPage() {
     }
   };
 
-  const loadConversationLinks = async (conversation: Conversation, filter: 'all' | 'contact' | 'me') => {
-    const senderId = conversation.type !== 'direct' || filter === 'all'
-      ? undefined
-      : filter === 'me'
-        ? currentUser.id
-        : conversation.user?.id;
-
-    const linksData = await getConversationLinks(conversation.id, {
-      limit: 40,
-      senderId,
-    });
-    setLinkPreviews(linksData.links);
+  const handleOpenDetails = async () => {
+    await openDetails(activeConversation);
   };
 
-  const openDetails = async () => {
-    if (!activeConversation) return;
-    setDetailsOpen(true);
-    setDetailsError('');
-    setDetailsNotice('');
-    setInviteLinks([]);
-    setMembers([]);
-    setMediaAttachments([]);
-    setFileAttachments([]);
-    setLinkPreviews([]);
-    setLinkFilter('all');
-    setGroupNameDraft(activeConversation.name);
-    setAnnouncementDraft(activeConversation.announcement || '');
-    setMemberSearch('');
-    setMemberSearchResults([]);
-
-    setAttachmentsLoading(true);
-    try {
-      const attachmentsPromise = getConversationAttachments(activeConversation.id, { limit: 80 });
-      const linksPromise = loadConversationLinks(activeConversation, 'all');
-      const attachmentsData = await attachmentsPromise;
-      await linksPromise;
-      setMediaAttachments(attachmentsData.attachments.filter(attachment => attachment.kind !== 'file'));
-      setFileAttachments(attachmentsData.attachments.filter(attachment => attachment.kind === 'file'));
-    } catch (error: any) {
-      setDetailsError(error.response?.data?.message || 'Could not load shared content');
-    } finally {
-      setAttachmentsLoading(false);
-    }
-
-    setMembersLoading(true);
-    setInviteLoading(true);
-    try {
-      const nextMembers = activeConversation.type === 'channel'
-        ? await getChannelMembers(activeConversation.id)
-        : activeConversation.type === 'group'
-          ? await getGroupMembers(activeConversation.id)
-          : [];
-      setMembers(nextMembers);
-      const currentMember = nextMembers.find(member => member.userId === currentUser.id);
-      if (activeConversation.type === 'group' && (currentMember?.role === 'owner' || currentMember?.role === 'admin')) {
-        setInviteLinks(await getGroupInviteLinks(activeConversation.id));
-      } else {
-        setInviteLinks([]);
-      }
-    } catch (error: any) {
-      setDetailsError(error.response?.data?.message || 'Could not load members');
-    } finally {
-      setMembersLoading(false);
-      setInviteLoading(false);
-    }
+  const handleChangeLinkFilter = async (filter: 'all' | 'contact' | 'me') => {
+    await changeLinkFilter(activeConversation, filter);
   };
 
-  const changeLinkFilter = async (filter: 'all' | 'contact' | 'me') => {
-    if (!activeConversation) return;
-    setLinkFilter(filter);
-    setAttachmentsLoading(true);
-    setDetailsError('');
-    try {
-      await loadConversationLinks(activeConversation, filter);
-    } catch (error: any) {
-      setDetailsError(error.response?.data?.message || 'Could not load links');
-    } finally {
-      setAttachmentsLoading(false);
-    }
+  const handleCreateInviteLink = async () => {
+    await createInviteLink(activeConversation);
   };
 
-  const createInviteLink = async () => {
-    if (!activeConversation) return;
-    setInviteLoading(true);
-    setDetailsError('');
-    setDetailsNotice('');
-    try {
-      const invite = await createGroupInviteLink(activeConversation.id);
-      setInviteLinks(prev => [invite, ...prev]);
-    } catch (error: any) {
-      setDetailsError(error.response?.data?.message || 'Could not create invite link');
-    } finally {
-      setInviteLoading(false);
-    }
+  const handleRevokeInviteLink = async (inviteId: string) => {
+    await revokeInviteLink(activeConversation, inviteId);
   };
 
-  const copyInviteLink = async (invite: InviteLink) => {
-    setDetailsError('');
-    setDetailsNotice('');
-    try {
-      await copyTextToClipboard(`${window.location.origin}/chat?invite=${invite.code}`);
-      setDetailsNotice('Invite link copied');
-    } catch {
-      setDetailsError('Could not copy invite link');
-    }
+  const handleSaveGroupName = async () => {
+    await saveGroupName(activeConversation);
   };
 
-  const revokeInviteLink = async (inviteId: string) => {
-    if (!activeConversation) return;
-    setInviteLoading(true);
-    setDetailsError('');
-    setDetailsNotice('');
-    try {
-      const revoked = await revokeGroupInviteLink(activeConversation.id, inviteId);
-      setInviteLinks(prev => prev.map(invite => invite.id === revoked.id ? revoked : invite));
-    } catch (error: any) {
-      setDetailsError(error.response?.data?.message || 'Could not revoke invite link');
-    } finally {
-      setInviteLoading(false);
-    }
+  const handleSaveAnnouncement = async () => {
+    await saveAnnouncement(activeConversation);
   };
 
-  const saveGroupName = async () => {
-    if (!activeConversation || activeConversation.type !== 'group') return;
-    try {
-      const updated = await updateGroup(activeConversation.id, { name: groupNameDraft.trim() });
-      applyConversationPatch(updated.id, updated);
-    } catch (error: any) {
-      setDetailsError(error.response?.data?.message || 'Could not update group');
-    }
+  const handleAddMember = async (user: SearchUser) => {
+    await addMember(activeConversation, user);
   };
 
-  const saveAnnouncement = async () => {
-    if (!activeConversation || activeConversation.type !== 'group') return;
-    try {
-      const updated = await updateGroup(activeConversation.id, { announcement: announcementDraft });
-      applyConversationPatch(updated.id, updated);
-      setDetailsNotice('Announcement saved');
-    } catch (error: any) {
-      setDetailsError(error.response?.data?.message || 'Could not update announcement');
-    }
-  };
-
-  const addMember = async (user: SearchUser) => {
-    if (!activeConversation) return;
-    try {
-      const nextMembers = await addGroupMembers(activeConversation.id, [user.id]);
-      setMembers(nextMembers);
-      setMemberSearch('');
-      setMemberSearchResults([]);
-      applyMemberCount(activeConversation.id, nextMembers.length);
-    } catch (error: any) {
-      setDetailsError(error.response?.data?.message || 'Could not add member');
-    }
-  };
-
-  const removeMember = async (userId: string) => {
-    if (!activeConversation) return;
-    try {
-      const nextMembers = await removeGroupMember(activeConversation.id, userId);
-      setMembers(nextMembers);
-      applyMemberCount(activeConversation.id, nextMembers.length);
-    } catch (error: any) {
-      setDetailsError(error.response?.data?.message || 'Could not remove member');
-    }
+  const handleRemoveMember = async (userId: string) => {
+    await removeMember(activeConversation, userId);
   };
 
   const typingText = activeConversation && typingUsers[activeConversation.id]?.length
@@ -1141,7 +999,7 @@ export function ChatPage() {
               conversation={activeConversation}
               typingText={typingText}
               onBack={() => setMobileConversationOpen(false)}
-              onOpenDetails={openDetails}
+              onOpenDetails={handleOpenDetails}
             />
             {activeConversation.type === 'group' && activeConversation.announcement && (
               <div className="announcement-bar">
@@ -1315,18 +1173,18 @@ export function ChatPage() {
         loading={membersLoading}
         error={detailsError}
         notice={detailsNotice}
-        onClose={() => setDetailsOpen(false)}
+        onClose={closeDetails}
         onMemberSearchChange={setMemberSearch}
         onGroupNameDraftChange={setGroupNameDraft}
         onAnnouncementDraftChange={setAnnouncementDraft}
-        onLinkFilterChange={changeLinkFilter}
-        onSaveGroupName={saveGroupName}
-        onSaveAnnouncement={saveAnnouncement}
-        onAddMember={addMember}
-        onRemoveMember={removeMember}
-        onCreateInviteLink={createInviteLink}
+        onLinkFilterChange={handleChangeLinkFilter}
+        onSaveGroupName={handleSaveGroupName}
+        onSaveAnnouncement={handleSaveAnnouncement}
+        onAddMember={handleAddMember}
+        onRemoveMember={handleRemoveMember}
+        onCreateInviteLink={handleCreateInviteLink}
         onCopyInviteLink={copyInviteLink}
-        onRevokeInviteLink={revokeInviteLink}
+        onRevokeInviteLink={handleRevokeInviteLink}
       />
     </div>
   );
