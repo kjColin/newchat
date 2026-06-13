@@ -35,7 +35,7 @@
 | 群组列表 | frontend | ✅ |
 | 加载更早消息/未读分割线/跳转最新 | frontend | ✅ |
 | 单元测试 | qa-audit | ⏳ |
-| 集成测试 | qa-audit | ⏳ |
+| 基础 e2e 集成测试 | qa-audit | ✅ |
 
 **交付物**:
 - 完整聊天功能
@@ -94,7 +94,7 @@
 
 ```
 Milestone 1: ████████░░ 80%
-Milestone 2: ████████░░ 80%
+Milestone 2: █████████░ 90%
 Milestone 3: ██████████ 100%
 Milestone 4: ░░░░░░░░░░  0%
 ```
