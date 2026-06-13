@@ -1209,6 +1209,41 @@
   background: #fff;
 }
 
+.toggle-field {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 14px;
+  padding: 10px 12px;
+  background: var(--surface-muted);
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+}
+
+.toggle-field span,
+.toggle-field strong,
+.toggle-field small {
+  display: block;
+  min-width: 0;
+}
+
+.toggle-field strong {
+  font-size: 13px;
+}
+
+.toggle-field small {
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.toggle-field input {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--teal);
+}
+
 .modal-user-list {
   display: flex;
   flex-direction: column;

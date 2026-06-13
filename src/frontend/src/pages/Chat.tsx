@@ -206,6 +206,8 @@ export function ChatPage() {
   const [profileOpen, setProfileOpen] = useState(false);
   const [profileUsername, setProfileUsername] = useState('');
   const [profileAvatar, setProfileAvatar] = useState('');
+  const [profileSearchable, setProfileSearchable] = useState(true);
+  const [profileAllowDirectMessages, setProfileAllowDirectMessages] = useState(true);
   const [profileSaving, setProfileSaving] = useState(false);
   const [profileError, setProfileError] = useState('');
   const [profileNotice, setProfileNotice] = useState('');
@@ -1040,6 +1042,8 @@ export function ChatPage() {
     if (!currentUser) return;
     setProfileUsername(currentUser.username);
     setProfileAvatar(currentUser.avatar || '');
+    setProfileSearchable(currentUser.searchable !== false);
+    setProfileAllowDirectMessages(currentUser.allowDirectMessages !== false);
     setProfileError('');
     setProfileNotice('');
     setProfileOpen(true);
@@ -1057,7 +1061,12 @@ export function ChatPage() {
     setProfileError('');
     setProfileNotice('');
     try {
-      const updated = await updateCurrentUser({ username, avatar: profileAvatar });
+      const updated = await updateCurrentUser({
+        username,
+        avatar: profileAvatar,
+        searchable: profileSearchable,
+        allowDirectMessages: profileAllowDirectMessages,
+      });
       const token = authStore.getToken();
       if (token) {
         authStore.setSession(token, updated);
@@ -1065,6 +1074,8 @@ export function ChatPage() {
       setCurrentUser(updated);
       setProfileUsername(updated.username);
       setProfileAvatar(updated.avatar || '');
+      setProfileSearchable(updated.searchable !== false);
+      setProfileAllowDirectMessages(updated.allowDirectMessages !== false);
       setMessages(prev => prev.map(message =>
         message.senderId === updated.id
           ? { ...message, sender: { ...(message.sender || {}), id: updated.id, username: updated.username, avatar: updated.avatar } }
@@ -1493,11 +1504,15 @@ export function ChatPage() {
         user={currentUser}
         username={profileUsername}
         avatar={profileAvatar}
+        searchable={profileSearchable}
+        allowDirectMessages={profileAllowDirectMessages}
         submitting={profileSaving}
         error={profileError}
         notice={profileNotice}
         onUsernameChange={setProfileUsername}
         onAvatarChange={setProfileAvatar}
+        onSearchableChange={setProfileSearchable}
+        onAllowDirectMessagesChange={setProfileAllowDirectMessages}
         onSubmit={saveProfile}
         onClose={() => setProfileOpen(false)}
       />

@@ -67,7 +67,9 @@
   "email": "string",
   "avatar": "url",
   "status": "online|offline",
-  "lastSeen": "timestamp"
+  "lastSeen": "timestamp",
+  "searchable": true,
+  "allowDirectMessages": true
 }
 ```
 
@@ -78,11 +80,13 @@
 ```json
 {
   "username": "string",
-  "avatar": "url"
+  "avatar": "url",
+  "searchable": true,
+  "allowDirectMessages": true
 }
 ```
 
-`username` 会去除首尾空格，长度为 2-32 字符且必须唯一；`avatar` 为空字符串时会清空头像。
+`username` 会去除首尾空格，长度为 2-32 字符且必须唯一；`avatar` 为空字符串时会清空头像。`searchable=false` 时不会出现在用户搜索结果；`allowDirectMessages=false` 时仅允许联系人发起单聊。
 
 **Response** (200)
 ```json
@@ -92,12 +96,14 @@
   "email": "string",
   "avatar": "url|null",
   "status": "online|offline",
-  "lastSeen": "timestamp"
+  "lastSeen": "timestamp",
+  "searchable": true,
+  "allowDirectMessages": true
 }
 ```
 
 ### GET /api/users/search
-搜索用户，并返回当前用户与搜索结果的联系人/拉黑关系。
+搜索用户，并返回当前用户与搜索结果的联系人/拉黑关系。设置 `searchable=false` 的用户不会出现在搜索结果中。
 
 **Query**: `?q=<keyword>`
 

@@ -7,7 +7,7 @@ export async function getCurrentUser() {
   return data;
 }
 
-export async function updateCurrentUser(payload: { username?: string; avatar?: string }) {
+export async function updateCurrentUser(payload: { username?: string; avatar?: string; searchable?: boolean; allowDirectMessages?: boolean }) {
   const { data } = await apiClient.patch<User>('/users/me', payload);
   return data;
 }

@@ -7,11 +7,15 @@ type ProfileModalProps = {
   user: User;
   username: string;
   avatar: string;
+  searchable: boolean;
+  allowDirectMessages: boolean;
   submitting: boolean;
   error: string;
   notice: string;
   onUsernameChange: (value: string) => void;
   onAvatarChange: (value: string) => void;
+  onSearchableChange: (value: boolean) => void;
+  onAllowDirectMessagesChange: (value: boolean) => void;
   onSubmit: () => void;
   onClose: () => void;
 };
@@ -21,11 +25,15 @@ export function ProfileModal({
   user,
   username,
   avatar,
+  searchable,
+  allowDirectMessages,
   submitting,
   error,
   notice,
   onUsernameChange,
   onAvatarChange,
+  onSearchableChange,
+  onAllowDirectMessagesChange,
   onSubmit,
   onClose,
 }: ProfileModalProps) {
@@ -76,6 +84,30 @@ export function ProfileModal({
               onChange={event => onAvatarChange(event.target.value)}
               placeholder="https://example.com/avatar.png"
               maxLength={500}
+            />
+          </label>
+
+          <label className="toggle-field">
+            <span>
+              <strong>Search visibility</strong>
+              <small>Allow people to find this account by username or email.</small>
+            </span>
+            <input
+              type="checkbox"
+              checked={searchable}
+              onChange={event => onSearchableChange(event.target.checked)}
+            />
+          </label>
+
+          <label className="toggle-field">
+            <span>
+              <strong>Direct messages</strong>
+              <small>Allow non-contacts to start a direct chat.</small>
+            </span>
+            <input
+              type="checkbox"
+              checked={allowDirectMessages}
+              onChange={event => onAllowDirectMessagesChange(event.target.checked)}
             />
           </label>
 

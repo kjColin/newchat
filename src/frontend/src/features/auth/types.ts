@@ -5,6 +5,8 @@ export type User = {
   avatar?: string | null;
   status?: string;
   lastSeen?: string;
+  searchable?: boolean;
+  allowDirectMessages?: boolean;
   createdAt?: string;
   updatedAt?: string;
 };

@@ -12,12 +12,14 @@ export class UsersService {
     return result;
   }
 
-  async update(id: string, data: { username?: string; avatar?: string }) {
+  async update(id: string, data: { username?: string; avatar?: string; searchable?: boolean; allowDirectMessages?: boolean }) {
     const username = data.username?.trim();
     const avatar = data.avatar?.trim();
     const updateData = {
       username,
       avatar: data.avatar === undefined ? undefined : avatar || null,
+      searchable: data.searchable,
+      allowDirectMessages: data.allowDirectMessages,
     };
     if (username !== undefined && (username.length < 2 || username.length > 32)) {
       throw new BadRequestException('Username must be 2-32 characters');
@@ -52,6 +54,7 @@ export class UsersService {
     const users = await this.prisma.user.findMany({
       where: {
         id: { not: currentUserId },
+        searchable: true,
         OR: [
           { username: { contains: q, mode: 'insensitive' } },
           { email: { contains: q, mode: 'insensitive' } },
@@ -182,6 +185,8 @@ export class UsersService {
       avatar: true,
       status: true,
       lastSeen: true,
+      searchable: true,
+      allowDirectMessages: true,
     };
   }
 

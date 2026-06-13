@@ -11,6 +11,7 @@ export class ConversationsService {
     }
 
     await this.ensureNotBlocked(userId, targetUserId);
+    await this.ensureDirectAllowed(userId, targetUserId);
 
     const existing = await this.prisma.conversation.findMany({
       where: {
@@ -289,6 +290,33 @@ export class ConversationsService {
 
     if (block) {
       throw new ForbiddenException('Direct conversation is not available');
+    }
+  }
+
+  private async ensureDirectAllowed(userId: string, targetUserId: string) {
+    const target = await this.prisma.user.findUnique({
+      where: { id: targetUserId },
+      select: { allowDirectMessages: true },
+    });
+
+    if (!target) {
+      throw new ForbiddenException('Direct conversation is not available');
+    }
+
+    if (target.allowDirectMessages) return;
+
+    const contact = await this.prisma.contact.findUnique({
+      where: {
+        ownerId_userId: {
+          ownerId: targetUserId,
+          userId,
+        },
+      },
+      select: { userId: true },
+    });
+
+    if (!contact) {
+      throw new ForbiddenException('This user only accepts direct messages from contacts');
     }
   }
 }
