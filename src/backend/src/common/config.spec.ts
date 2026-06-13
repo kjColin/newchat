@@ -32,6 +32,7 @@ describe('runtime config', () => {
   it('uses development defaults for local startup', () => {
     expect(getJwtSecret()).toBe('dev-secret-change-me');
     expect(getCorsOrigins()).toContain('http://localhost:5173');
+    expect(getCorsOrigins()).toContain('https://localhost');
     expect(getPort()).toBe(3000);
     expect(getPresenceOfflineDelayMs()).toBe(15000);
     expect(getWebPushConfig().enabled).toBe(false);

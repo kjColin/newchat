@@ -64,9 +64,8 @@ newchat-debug-apk/app-debug.apk
 
 The latest verified run at the time of this update is:
 
-- Run: `https://github.com/kjColin/newchat/actions/runs/27465452273`
+- Run: `https://github.com/kjColin/newchat/actions/runs/27466092918`
 - Artifact: `newchat-debug-apk`
-- Digest: `sha256:102461b5d7b0912919071abbc0718faa8e47face3f2708080863b8bd401a1dc6`
 
 ## Android Studio
 
@@ -81,8 +80,20 @@ npm run android:open
 
 - Browser builds continue to use relative `/api` and `/socket.io` paths through the Vite/Nginx proxy.
 - Android builds must use `VITE_API_BASE_URL` and `VITE_SOCKET_URL` because packaged WebView assets are served from the app origin, not `newchat.clnkj.de`.
+- Capacitor Android serves bundled web assets from `https://localhost`. The production backend `CORS_ORIGINS` must include `https://localhost`; otherwise the APK login request is blocked by WebView CORS and the UI only shows `An error occurred`.
 - The first APK keeps foreground Socket and in-app notification behavior. Native Android push should be added in a later FCM + Capacitor Push Notifications pass.
 - File upload should be validated on a physical Android device because WebView file picker behavior differs from desktop browsers.
+
+Validate APK CORS against production:
+
+```bash
+curl -i -X OPTIONS https://newchat.clnkj.de/api/auth/login \
+  -H 'Origin: https://localhost' \
+  -H 'Access-Control-Request-Method: POST' \
+  -H 'Access-Control-Request-Headers: content-type'
+```
+
+Expected: `204 No Content` with `access-control-allow-origin: https://localhost`.
 
 ## Release Signing
 

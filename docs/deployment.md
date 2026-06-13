@@ -110,6 +110,17 @@ curl -k https://newchat.clnkj.de/api/notifications/push/public-key
 
 Expected for an anonymous request: `401 Unauthorized`. This confirms Nginx reaches the backend and the auth pipeline is active.
 
+Android APK CORS preflight:
+
+```bash
+curl -i -X OPTIONS https://newchat.clnkj.de/api/auth/login \
+  -H 'Origin: https://localhost' \
+  -H 'Access-Control-Request-Method: POST' \
+  -H 'Access-Control-Request-Headers: content-type'
+```
+
+Expected: `204 No Content` with `access-control-allow-origin: https://localhost`. Capacitor Android serves the bundled app from a local WebView origin, so production `CORS_ORIGINS` must include `https://localhost` in addition to `https://newchat.clnkj.de`.
+
 Backend logs:
 
 ```bash
