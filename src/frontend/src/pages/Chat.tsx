@@ -4,9 +4,7 @@ import { ArrowDown, MessageCircle, Pin, X } from 'lucide-react';
 import { authStore } from '../features/auth/auth-store';
 import type { User } from '../features/auth/types';
 import {
-  createChannel,
   createDirectConversation,
-  createGroup,
   getPinnedMessages,
   joinGroupByInvite,
   joinPublicGroup,
@@ -25,6 +23,7 @@ import type { Attachment, ChannelDiscoveryItem, Conversation, GroupDiscoveryItem
 import { useChatSocket } from '../features/chats/useChatSocket';
 import { useConversations } from '../features/chats/useConversations';
 import { useConversationDetails } from '../features/chats/useConversationDetails';
+import { useCreateConversation } from '../features/chats/useCreateConversation';
 import { useMessages } from '../features/chats/useMessages';
 import { CreateChannelModal } from '../features/channels/components/CreateChannelModal';
 import { CreateGroupModal } from '../features/groups/components/CreateGroupModal';
@@ -95,16 +94,6 @@ export function ChatPage() {
   const [contacts, setContacts] = useState<ContactEntry[]>([]);
   const [blockedUsers, setBlockedUsers] = useState<BlockedUserEntry[]>([]);
   const [mobileConversationOpen, setMobileConversationOpen] = useState(false);
-  const [createGroupOpen, setCreateGroupOpen] = useState(false);
-  const [createChannelOpen, setCreateChannelOpen] = useState(false);
-  const [groupName, setGroupName] = useState('');
-  const [selectedMembers, setSelectedMembers] = useState<SearchUser[]>([]);
-  const [createError, setCreateError] = useState('');
-  const [creatingGroup, setCreatingGroup] = useState(false);
-  const [channelName, setChannelName] = useState('');
-  const [channelDescription, setChannelDescription] = useState('');
-  const [channelError, setChannelError] = useState('');
-  const [creatingChannel, setCreatingChannel] = useState(false);
   const [typingUsers, setTypingUsers] = useState<Record<string, string[]>>({});
   const [inviteInput, setInviteInput] = useState('');
   const [joiningInvite, setJoiningInvite] = useState(false);
@@ -199,6 +188,34 @@ export function ChatPage() {
     currentUser,
     onConversationPatch: applyConversationPatch,
     onMemberCountChange: applyMemberCount,
+  });
+  const {
+    createGroupOpen,
+    createChannelOpen,
+    groupName,
+    selectedMembers,
+    createError,
+    creatingGroup,
+    channelName,
+    channelDescription,
+    channelError,
+    creatingChannel,
+    setGroupName,
+    setChannelName,
+    setChannelDescription,
+    openCreateGroup,
+    closeCreateGroup,
+    openCreateChannel,
+    closeCreateChannel,
+    toggleMember,
+    submitGroup,
+    submitChannel,
+  } = useCreateConversation({
+    onClearGroupSearch: clearGroupSearch,
+    onConversationCreated: async conversation => {
+      upsertConversation(conversation);
+      await selectConversationRef.current?.(conversation);
+    },
   });
   const {
     messages,
@@ -660,49 +677,6 @@ export function ChatPage() {
     }
   };
 
-  const toggleMember = (user: SearchUser) => {
-    setSelectedMembers(prev =>
-      prev.some(member => member.id === user.id)
-        ? prev.filter(member => member.id !== user.id)
-        : [...prev, user]
-    );
-  };
-
-  const handleCreateGroup = async () => {
-    setCreatingGroup(true);
-    setCreateError('');
-    try {
-      const conversation = await createGroup(groupName.trim(), selectedMembers.map(member => member.id));
-      upsertConversation(conversation);
-      setCreateGroupOpen(false);
-      setGroupName('');
-      clearGroupSearch();
-      setSelectedMembers([]);
-      await selectConversation(conversation);
-    } catch (error: any) {
-      setCreateError(error.response?.data?.message || 'Could not create group');
-    } finally {
-      setCreatingGroup(false);
-    }
-  };
-
-  const handleCreateChannel = async () => {
-    setCreatingChannel(true);
-    setChannelError('');
-    try {
-      const conversation = await createChannel(channelName.trim(), channelDescription.trim());
-      upsertConversation(conversation);
-      setCreateChannelOpen(false);
-      setChannelName('');
-      setChannelDescription('');
-      await selectConversation(conversation);
-    } catch (error: any) {
-      setChannelError(error.response?.data?.message || 'Could not create channel');
-    } finally {
-      setCreatingChannel(false);
-    }
-  };
-
   const handleSubscribeChannel = async (channel: ChannelDiscoveryItem) => {
     setDiscoveryActionLoading(channel.conversationId);
     setSidebarError('');
@@ -920,8 +894,8 @@ export function ChatPage() {
         onOpenJoinedGroup={handleOpenJoinedGroup}
         onSubscribeChannel={handleSubscribeChannel}
         onUnsubscribeChannel={handleUnsubscribeChannel}
-        onOpenCreateGroup={() => setCreateGroupOpen(true)}
-        onOpenCreateChannel={() => setCreateChannelOpen(true)}
+        onOpenCreateGroup={openCreateGroup}
+        onOpenCreateChannel={openCreateChannel}
         onOpenProfile={openProfile}
         onLogout={logout}
         onTogglePinned={handleTogglePinned}
@@ -1056,8 +1030,8 @@ export function ChatPage() {
         onNameChange={setGroupName}
         onQueryChange={setGroupSearch}
         onToggleUser={toggleMember}
-        onSubmit={handleCreateGroup}
-        onClose={() => setCreateGroupOpen(false)}
+        onSubmit={submitGroup}
+        onClose={closeCreateGroup}
       />
 
       <CreateChannelModal
@@ -1068,8 +1042,8 @@ export function ChatPage() {
         error={channelError}
         onNameChange={setChannelName}
         onDescriptionChange={setChannelDescription}
-        onSubmit={handleCreateChannel}
-        onClose={() => setCreateChannelOpen(false)}
+        onSubmit={submitChannel}
+        onClose={closeCreateChannel}
       />
 
       <ProfileModal
