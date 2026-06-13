@@ -781,6 +781,55 @@
 }
 ```
 
+### GET /api/notifications/push/public-key
+获取 Web Push VAPID public key。未配置 VAPID key 时返回 `enabled=false`，前端会降级为站内通知和前台浏览器通知。
+
+**Response** (200)
+```json
+{
+  "enabled": true,
+  "publicKey": "base64url-vapid-public-key"
+}
+```
+
+### POST /api/notifications/push/subscriptions
+保存当前用户的浏览器 Push Subscription。相同 endpoint 会更新所属用户和密钥。
+
+**Request**
+```json
+{
+  "endpoint": "https://push.example/subscription",
+  "keys": {
+    "p256dh": "string",
+    "auth": "string"
+  }
+}
+```
+
+**Response** (201)
+```json
+{
+  "subscribed": true
+}
+```
+
+### DELETE /api/notifications/push/subscriptions
+删除当前用户的浏览器 Push Subscription。
+
+**Request**
+```json
+{
+  "endpoint": "https://push.example/subscription"
+}
+```
+
+**Response** (200)
+```json
+{
+  "deleted": 1
+}
+```
+
 ---
 
 ## WebSocket Events

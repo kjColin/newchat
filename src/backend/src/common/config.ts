@@ -61,6 +61,22 @@ export function getPresenceOfflineDelayMs() {
   return getPositiveIntegerEnv('PRESENCE_OFFLINE_DELAY_MS', 15000);
 }
 
+export function getWebPushConfig() {
+  const publicKey = process.env.WEB_PUSH_PUBLIC_KEY?.trim();
+  const privateKey = process.env.WEB_PUSH_PRIVATE_KEY?.trim();
+  const subject = process.env.WEB_PUSH_SUBJECT?.trim() || 'mailto:admin@example.com';
+
+  if (!publicKey || !privateKey) {
+    if (process.env.NODE_ENV === 'production') {
+      throw new Error('WEB_PUSH_PUBLIC_KEY and WEB_PUSH_PRIVATE_KEY are required in production');
+    }
+
+    return { enabled: false as const, publicKey: publicKey || '', privateKey: privateKey || '', subject };
+  }
+
+  return { enabled: true as const, publicKey, privateKey, subject };
+}
+
 export function getHost() {
   return process.env.HOST?.trim() || '127.0.0.1';
 }
@@ -96,4 +112,5 @@ export function validateRuntimeConfig() {
   getNotificationMaxPerUser();
   getNotificationCleanupIntervalMs();
   getPresenceOfflineDelayMs();
+  getWebPushConfig();
 }

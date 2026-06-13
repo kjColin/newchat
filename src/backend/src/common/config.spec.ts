@@ -4,6 +4,7 @@ import {
   getNotificationRetentionDays,
   getPresenceOfflineDelayMs,
   getPort,
+  getWebPushConfig,
   validateRuntimeConfig,
 } from './config';
 
@@ -19,6 +20,9 @@ describe('runtime config', () => {
     delete process.env.PORT;
     delete process.env.NOTIFICATION_RETENTION_DAYS;
     delete process.env.PRESENCE_OFFLINE_DELAY_MS;
+    delete process.env.WEB_PUSH_PUBLIC_KEY;
+    delete process.env.WEB_PUSH_PRIVATE_KEY;
+    delete process.env.WEB_PUSH_SUBJECT;
   });
 
   afterAll(() => {
@@ -30,6 +34,7 @@ describe('runtime config', () => {
     expect(getCorsOrigins()).toContain('http://localhost:5173');
     expect(getPort()).toBe(3000);
     expect(getPresenceOfflineDelayMs()).toBe(15000);
+    expect(getWebPushConfig().enabled).toBe(false);
   });
 
   it('requires production secrets and CORS origins', () => {
@@ -40,6 +45,9 @@ describe('runtime config', () => {
 
     process.env.JWT_SECRET = 'prod-secret';
     expect(() => validateRuntimeConfig()).toThrow('CORS_ORIGINS is required in production');
+
+    process.env.CORS_ORIGINS = 'https://app.example.com';
+    expect(() => validateRuntimeConfig()).toThrow('WEB_PUSH_PUBLIC_KEY and WEB_PUSH_PRIVATE_KEY are required in production');
   });
 
   it('parses configured production values', () => {
@@ -50,12 +58,21 @@ describe('runtime config', () => {
     process.env.PORT = '3101';
     process.env.NOTIFICATION_RETENTION_DAYS = '14';
     process.env.PRESENCE_OFFLINE_DELAY_MS = '250';
+    process.env.WEB_PUSH_PUBLIC_KEY = 'public-key';
+    process.env.WEB_PUSH_PRIVATE_KEY = 'private-key';
+    process.env.WEB_PUSH_SUBJECT = 'mailto:ops@example.com';
 
     expect(validateRuntimeConfig()).toBeUndefined();
     expect(getCorsOrigins()).toEqual(['https://app.example.com', 'https://admin.example.com']);
     expect(getPort()).toBe(3101);
     expect(getNotificationRetentionDays()).toBe(14);
     expect(getPresenceOfflineDelayMs()).toBe(250);
+    expect(getWebPushConfig()).toEqual({
+      enabled: true,
+      publicKey: 'public-key',
+      privateKey: 'private-key',
+      subject: 'mailto:ops@example.com',
+    });
   });
 
   it('rejects non-integer numeric environment values', () => {

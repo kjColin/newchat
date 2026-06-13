@@ -386,6 +386,7 @@ Client selects file
 - `NOTIFICATION_RETENTION_DAYS` 控制过期删除，默认 30 天。
 - `NOTIFICATION_MAX_PER_USER` 控制每个用户最多保留最近通知数量，默认 100 条。
 - 新消息生成通知后会立即对接收者执行上限裁剪，避免高频会话无限增长。
+- Web Push 通过 `PushSubscription` 保存浏览器 endpoint 和加密 key；配置 VAPID key 后，服务端在生成站内通知后尝试投递 Push。未配置时自动降级，不影响站内通知、Socket 通知和前台浏览器通知。
 
 ## 10. 安全设计
 
@@ -473,6 +474,8 @@ Data
 | `NOTIFICATION_MAX_PER_USER` | 每个用户最多保留通知数量 |
 | `NOTIFICATION_CLEANUP_INTERVAL_MINUTES` | 通知后台清理周期 |
 | `PRESENCE_OFFLINE_DELAY_MS` | 最后一个 Socket 断开后标记离线的延迟 |
+| `WEB_PUSH_PUBLIC_KEY` / `WEB_PUSH_PRIVATE_KEY` | Web Push VAPID key，生产环境必填 |
+| `WEB_PUSH_SUBJECT` | Web Push VAPID subject，例如 `mailto:ops@example.com` |
 
 ## 13. 演进路线
 
@@ -511,8 +514,8 @@ Data
 - `newchat` 目录与实际运行目录不一致，容易导致部署和维护误操作。
 - `.env`、`dist`、`node_modules`、备份文件出现在工作区，版本管理边界不清。
 - 生产环境已强制校验 `JWT_SECRET` 和 `CORS_ORIGINS`；部署时必须提供真实密钥和前端域名。
-- 自动化测试已覆盖核心 REST 流程、Socket 实时事件和多设备在线状态；Web Push 仍需要补充自动化验证。
-- 站内通知已持久化并支持保留策略；Web Push 仍待生产化。
+- 自动化测试已覆盖核心 REST 流程、Socket 实时事件、多设备在线状态和 Web Push 注册降级；真实浏览器 Push 投递仍需要端到端环境验证。
+- 站内通知已持久化并支持保留策略；Web Push 已具备可配置投递路径，生产需要配置 VAPID key 并验证浏览器/平台兼容性。
 - `Chat.tsx` 状态过多，继续加功能会难以维护。
 
 ## 15. 近期落地建议
@@ -520,9 +523,9 @@ Data
 优先顺序：
 
 1. 清理工程边界，统一 `newchat` 与 `chat-app` 的部署目录关系。
-2. 扩展自动化覆盖：Web Push 注册、投递和降级路径。
+2. 在真实浏览器环境验证 Web Push 投递、权限拒绝和 subscription 失效清理。
 3. 将 `Chat.tsx` 拆为会话、消息、详情、Socket 等 hooks。
-4. 扩展 Web Push。
-5. 规划 Redis adapter、对象存储和消息队列接入。
+4. 规划 Redis adapter、对象存储和消息队列接入。
+5. 将 `Chat.tsx` 拆分后的 hooks 接入组件测试。
 
 这条路线能在不推翻现有 NestJS + React 架构的前提下，把当前应用从基础聊天应用平滑演进为更接近 Telegram 的实时通信产品。

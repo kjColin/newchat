@@ -62,6 +62,7 @@ describe('Chat flow (e2e)', () => {
 
       await prisma.$transaction([
         prisma.notification.deleteMany({ where: { OR: [{ userId: { in: userIds } }, { conversationId: { in: conversationIds } }] } }),
+        prisma.pushSubscription.deleteMany({ where: { userId: { in: userIds } } }),
         prisma.messageReaction.deleteMany({ where: { userId: { in: userIds } } }),
         prisma.pinnedMessage.deleteMany({ where: { pinnedById: { in: userIds } } }),
         prisma.attachment.deleteMany({ where: { uploaderId: { in: userIds } } }),
@@ -224,6 +225,48 @@ describe('Chat flow (e2e)', () => {
       },
     });
     expect(remainingExpired).toBe(0);
+  });
+
+  it('manages Web Push public key and subscriptions', async () => {
+    const alice = await register('push_alice', 0);
+    const endpoint = `https://push.example.com/${runId}/${alice.id}`;
+
+    const publicKey = await request(app.getHttpServer())
+      .get('/api/notifications/push/public-key')
+      .set('Authorization', `Bearer ${alice.token}`)
+      .expect(200);
+    expect(publicKey.body).toEqual({ enabled: false, publicKey: '' });
+
+    await request(app.getHttpServer())
+      .post('/api/notifications/push/subscriptions')
+      .set('Authorization', `Bearer ${alice.token}`)
+      .send({
+        endpoint,
+        keys: {
+          p256dh: 'test-p256dh',
+          auth: 'test-auth',
+        },
+      })
+      .expect(201)
+      .expect(response => {
+        expect(response.body.subscribed).toBe(true);
+      });
+
+    const saved = await prisma.pushSubscription.findUnique({ where: { endpoint } });
+    expect(saved).toMatchObject({
+      userId: alice.id,
+      p256dh: 'test-p256dh',
+      auth: 'test-auth',
+    });
+
+    await request(app.getHttpServer())
+      .delete('/api/notifications/push/subscriptions')
+      .set('Authorization', `Bearer ${alice.token}`)
+      .send({ endpoint })
+      .expect(200)
+      .expect(response => {
+        expect(response.body.deleted).toBe(1);
+      });
   });
 
   it('uploads an attachment, sends a file message, and lists conversation attachments', async () => {

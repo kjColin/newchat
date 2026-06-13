@@ -58,6 +58,7 @@
 | 用户头像/资料编辑 | fullstack | ✅ |
 | 搜索功能 | backend | ✅ |
 | 站内通知/浏览器通知 | fullstack | ✅ |
+| Web Push 可配置投递 | fullstack | ✅ |
 | 联系人/拉黑 | fullstack | ✅ |
 | 频道基础/发现/订阅 | fullstack | ✅ |
 | 公开群目录/发现/加入 | fullstack | ✅ |

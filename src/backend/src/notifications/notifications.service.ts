@@ -1,10 +1,20 @@
 import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
+import webPush from 'web-push';
 import { PrismaService } from '../prisma/prisma.service';
 import {
   getNotificationCleanupIntervalMs,
   getNotificationMaxPerUser,
   getNotificationRetentionDays,
+  getWebPushConfig,
 } from '../common/config';
+
+type PushSubscriptionPayload = {
+  endpoint: string;
+  keys: {
+    p256dh: string;
+    auth: string;
+  };
+};
 
 @Injectable()
 export class NotificationsService implements OnModuleInit, OnModuleDestroy {
@@ -12,9 +22,18 @@ export class NotificationsService implements OnModuleInit, OnModuleDestroy {
   private readonly retentionDays = getNotificationRetentionDays();
   private readonly maxPerUser = getNotificationMaxPerUser();
   private readonly cleanupIntervalMs = getNotificationCleanupIntervalMs();
+  private readonly webPushConfig = getWebPushConfig();
   private cleanupTimer?: NodeJS.Timeout;
 
-  constructor(private prisma: PrismaService) {}
+  constructor(private prisma: PrismaService) {
+    if (this.webPushConfig.enabled) {
+      webPush.setVapidDetails(
+        this.webPushConfig.subject,
+        this.webPushConfig.publicKey,
+        this.webPushConfig.privateKey,
+      );
+    }
+  }
 
   onModuleInit() {
     this.runCleanup('startup');
@@ -81,7 +100,10 @@ export class NotificationsService implements OnModuleInit, OnModuleDestroy {
       orderBy: { createdAt: 'desc' },
     });
 
-    return created.map(notification => this.format(notification));
+    const formatted = created.map(notification => this.format(notification));
+    await Promise.all(formatted.map(notification => this.sendPushNotification(notification)));
+
+    return formatted;
   }
 
   async markRead(userId: string, notificationId: string) {
@@ -114,6 +136,44 @@ export class NotificationsService implements OnModuleInit, OnModuleDestroy {
   async clear(userId: string) {
     const result = await this.prisma.notification.deleteMany({
       where: { userId },
+    });
+
+    return { deleted: result.count };
+  }
+
+  getPushPublicKey() {
+    return {
+      enabled: this.webPushConfig.enabled,
+      publicKey: this.webPushConfig.enabled ? this.webPushConfig.publicKey : '',
+    };
+  }
+
+  async savePushSubscription(userId: string, subscription: PushSubscriptionPayload) {
+    if (!subscription?.endpoint || !subscription.keys?.p256dh || !subscription.keys?.auth) {
+      return { subscribed: false };
+    }
+
+    await this.prisma.pushSubscription.upsert({
+      where: { endpoint: subscription.endpoint },
+      update: {
+        userId,
+        p256dh: subscription.keys.p256dh,
+        auth: subscription.keys.auth,
+      },
+      create: {
+        userId,
+        endpoint: subscription.endpoint,
+        p256dh: subscription.keys.p256dh,
+        auth: subscription.keys.auth,
+      },
+    });
+
+    return { subscribed: true };
+  }
+
+  async removePushSubscription(userId: string, endpoint: string) {
+    const result = await this.prisma.pushSubscription.deleteMany({
+      where: { userId, endpoint },
     });
 
     return { deleted: result.count };
@@ -179,6 +239,45 @@ export class NotificationsService implements OnModuleInit, OnModuleDestroy {
         const message = error instanceof Error ? error.message : String(error);
         this.logger.warn(`Notification cleanup (${reason}) failed: ${message}`);
       });
+  }
+
+  private async sendPushNotification(notification: any) {
+    if (!this.webPushConfig.enabled) return;
+
+    const subscriptions = await this.prisma.pushSubscription.findMany({
+      where: { userId: notification.userId },
+    });
+    if (subscriptions.length === 0) return;
+
+    const payload = JSON.stringify({
+      title: notification.title,
+      body: notification.body,
+      data: {
+        notificationId: notification.id,
+        conversationId: notification.conversationId,
+        messageId: notification.messageId,
+      },
+    });
+
+    await Promise.all(subscriptions.map(async subscription => {
+      try {
+        await webPush.sendNotification({
+          endpoint: subscription.endpoint,
+          keys: {
+            p256dh: subscription.p256dh,
+            auth: subscription.auth,
+          },
+        }, payload);
+      } catch (error: any) {
+        if ([404, 410].includes(error?.statusCode)) {
+          await this.prisma.pushSubscription.delete({ where: { id: subscription.id } }).catch(() => undefined);
+          return;
+        }
+
+        const message = error instanceof Error ? error.message : String(error);
+        this.logger.warn(`Web Push delivery failed: ${message}`);
+      }
+    }));
   }
 
   private notificationTitle(message: any, conversation: any) {

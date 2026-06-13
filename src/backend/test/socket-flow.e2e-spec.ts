@@ -109,6 +109,7 @@ describe('Socket flow (e2e)', () => {
 
       await prisma.$transaction([
         prisma.notification.deleteMany({ where: { OR: [{ userId: { in: userIds } }, { conversationId: { in: conversationIds } }] } }),
+        prisma.pushSubscription.deleteMany({ where: { userId: { in: userIds } } }),
         prisma.messageReaction.deleteMany({ where: { userId: { in: userIds } } }),
         prisma.pinnedMessage.deleteMany({ where: { pinnedById: { in: userIds } } }),
         prisma.attachment.deleteMany({ where: { uploaderId: { in: userIds } } }),

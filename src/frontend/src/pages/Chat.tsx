@@ -61,15 +61,17 @@ import {
   updateCurrentUser,
 } from '../features/users/api';
 import type { BlockedUserEntry, ContactEntry, SearchUser } from '../features/users/types';
-import { getBrowserNotificationState, requestBrowserNotificationPermission, showBrowserNotification } from '../features/notifications/browser-notifications';
+import { getBrowserNotificationState, requestBrowserNotificationPermission, showBrowserNotification, subscribeToWebPush } from '../features/notifications/browser-notifications';
 import { NotificationMenu } from '../features/notifications/components/NotificationMenu';
 import type { BrowserNotificationState, NotificationItem } from '../features/notifications/types';
 import {
   clearNotifications as clearStoredNotifications,
   getNotifications,
+  getPushPublicKey,
   markAllNotificationsRead as markAllStoredNotificationsRead,
   markConversationNotificationsRead,
   markNotificationRead,
+  savePushSubscription,
 } from '../features/notifications/api';
 import './Chat.css';
 
@@ -1118,6 +1120,19 @@ export function ChatPage() {
   const enableBrowserNotifications = async () => {
     const permission = await requestBrowserNotificationPermission();
     setBrowserNotificationState(permission as BrowserNotificationState);
+    if (permission !== 'granted') return;
+
+    try {
+      const pushConfig = await getPushPublicKey();
+      if (!pushConfig.enabled || !pushConfig.publicKey) return;
+
+      const subscription = await subscribeToWebPush(pushConfig.publicKey);
+      if (subscription) {
+        await savePushSubscription(subscription);
+      }
+    } catch {
+      // Browser notifications still work in the foreground when Web Push is unavailable.
+    }
   };
 
   const selectNotification = async (notification: NotificationItem) => {
