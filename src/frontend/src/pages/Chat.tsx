@@ -43,9 +43,8 @@ import { ConversationDetails } from '../features/chats/components/ConversationDe
 import { ConversationList } from '../features/chats/components/ConversationList';
 import { MessageComposer } from '../features/chats/components/MessageComposer';
 import { MessageList } from '../features/chats/components/MessageList';
-import { connectChatSocket, joinConversation, startTyping, stopTyping } from '../features/chats/socket';
-import type { ChatSocket } from '../features/chats/socket';
 import type { Attachment, ChannelDiscoveryItem, Conversation, GroupDiscoveryItem, GroupMember, InviteLink, LinkPreview, Message, PinnedMessage } from '../features/chats/types';
+import { useChatSocket } from '../features/chats/useChatSocket';
 import { CreateChannelModal } from '../features/channels/components/CreateChannelModal';
 import { CreateGroupModal } from '../features/groups/components/CreateGroupModal';
 import { ProfileModal } from '../features/users/components/ProfileModal';
@@ -149,7 +148,6 @@ export function ChatPage() {
   const [editingMessage, setEditingMessage] = useState<Message | null>(null);
   const [replyToMessage, setReplyToMessage] = useState<Message | null>(null);
   const [pendingAttachments, setPendingAttachments] = useState<Attachment[]>([]);
-  const [socket, setSocket] = useState<ChatSocket | null>(null);
   const [loadingConversations, setLoadingConversations] = useState(true);
   const [loadingMessages, setLoadingMessages] = useState(false);
   const [loadingEarlier, setLoadingEarlier] = useState(false);
@@ -267,7 +265,6 @@ export function ChatPage() {
     markConversationNotificationsLocalRead(conversation.id);
     setLoadingMessages(true);
     setMessageError('');
-    joinConversation(socket, conversation.id);
 
     try {
       const data = await getMessages(conversation.id);
@@ -300,7 +297,7 @@ export function ChatPage() {
     } finally {
       setLoadingMessages(false);
     }
-  }, [socket, markConversationNotificationsLocalRead]);
+  }, [markConversationNotificationsLocalRead]);
 
   const showMessageNotification = useCallback((message: Message) => {
     const conversation = conversationsRef.current.find(item => item.id === message.conversationId);
@@ -378,18 +375,10 @@ export function ChatPage() {
     selectConversationRef.current = selectConversation;
   }, [selectConversation]);
 
-  useEffect(() => {
-    if (socket && activeConversation?.id) {
-      joinConversation(socket, activeConversation.id);
-    }
-  }, [socket, activeConversation?.id]);
-
-  useEffect(() => {
-    const token = authStore.getToken();
-    if (!token) return;
-
-    const ws = connectChatSocket(token);
-    ws.on('message', message => {
+  const { startTyping: startSocketTyping, stopTyping: stopSocketTyping } = useChatSocket({
+    token: authStore.getToken(),
+    activeConversationId: activeConversation?.id || null,
+    onMessage: message => {
       setConversations(prev => sortConversations(prev.map(conversation => {
         if (conversation.id !== message.conversationId) return conversation;
 
@@ -420,38 +409,36 @@ export function ChatPage() {
       } else if (message.senderId !== currentUser?.id) {
         showMessageNotification(message);
       }
-    });
-    ws.on('notification', notification => {
-      receiveNotification(notification);
-    });
-    ws.on('message:updated', message => {
+    },
+    onNotification: receiveNotification,
+    onMessageUpdated: message => {
       setMessages(prev => prev.map(item => item.id === message.id ? message : item));
       setConversations(prev => prev.map(conversation =>
         conversation.lastMessage?.id === message.id ? { ...conversation, lastMessage: message } : conversation
       ));
-    });
-    ws.on('message:deleted', message => {
+    },
+    onMessageDeleted: message => {
       setMessages(prev => prev.map(item => item.id === message.id ? message : item));
       setConversations(prev => prev.map(conversation =>
         conversation.lastMessage?.id === message.id ? { ...conversation, lastMessage: message } : conversation
       ));
-    });
-    ws.on('message:reaction', message => {
+    },
+    onMessageReaction: message => {
       setMessages(prev => prev.map(item => item.id === message.id ? message : item));
-    });
-    ws.on('message:read', payload => {
+    },
+    onMessageRead: payload => {
       setConversations(prev => prev.map(conversation =>
         conversation.id === payload.conversationId && payload.userId === currentUser?.id
           ? { ...conversation, unreadCount: 0, lastReadAt: payload.lastReadAt }
           : conversation
       ));
-    });
-    ws.on('message:pinned', payload => {
+    },
+    onMessagePinned: payload => {
       if (activeConversationId.current === payload.conversationId) {
         setPinnedMessages(payload.pinnedMessages);
       }
-    });
-    ws.on('typing', payload => {
+    },
+    onTyping: payload => {
       setTypingUsers(prev => {
         const names = new Set(prev[payload.conversationId] || []);
         if (payload.isTyping) names.add(payload.username);
@@ -467,8 +454,8 @@ export function ChatPage() {
           }));
         }, 3500);
       }
-    });
-    ws.on('presence:update', payload => {
+    },
+    onPresenceUpdate: payload => {
       setConversations(prev => prev.map(conversation => {
         if (conversation.user?.id !== payload.userId) return conversation;
         return {
@@ -476,13 +463,8 @@ export function ChatPage() {
           user: { ...conversation.user, status: payload.status, lastSeen: payload.lastSeen },
         };
       }));
-    });
-
-    setSocket(ws);
-    return () => {
-      ws.disconnect();
-    };
-  }, [showMessageNotification, receiveNotification, currentUser?.id]);
+    },
+  });
 
   useEffect(() => {
     async function load() {
@@ -636,10 +618,10 @@ export function ChatPage() {
     setDraft(value);
     if (!activeConversation || editingMessage) return;
 
-    startTyping(socket, activeConversation.id);
+    startSocketTyping(activeConversation.id);
     if (typingTimer.current) window.clearTimeout(typingTimer.current);
     typingTimer.current = window.setTimeout(() => {
-      stopTyping(socket, activeConversation.id);
+      stopSocketTyping(activeConversation.id);
     }, 1200);
   };
 

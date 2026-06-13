@@ -121,7 +121,7 @@ src/frontend/src
 └── App.tsx
 ```
 
-当前 `Chat.tsx` 已承载较多状态和事件处理，目标拆分如下；其中 `useNotifications` 已先落地：
+当前 `Chat.tsx` 已承载较多状态和事件处理，目标拆分如下；其中 `useNotifications` 和 `useChatSocket` 已先落地：
 
 - `useConversations`：会话列表、置顶、免打扰、归档、未读计数。
 - `useMessages`：消息加载、分页、发送、编辑、删除、反应。
@@ -517,7 +517,7 @@ Data
 - 生产环境已强制校验 `JWT_SECRET` 和 `CORS_ORIGINS`；部署时必须提供真实密钥和前端域名。
 - 自动化测试已覆盖核心 REST 流程、Socket 实时事件、多设备在线状态和 Web Push 注册降级；真实浏览器 Push 投递仍需要端到端环境验证。
 - 站内通知已持久化并支持保留策略；Web Push 已具备可配置投递路径，生产需要配置 VAPID key 并验证浏览器/平台兼容性。
-- `Chat.tsx` 已抽出通知状态 hook；会话、消息、详情侧栏和 Socket 编排仍集中在页面组件里，继续加功能会难以维护。
+- `Chat.tsx` 已抽出通知状态和 Socket 编排 hook；会话、消息和详情侧栏仍集中在页面组件里，继续加功能会难以维护。
 
 ## 15. 近期落地建议
 
@@ -525,7 +525,7 @@ Data
 
 1. 清理工程边界，统一 `newchat` 与 `chat-app` 的部署目录关系。
 2. 在真实浏览器环境验证 Web Push 投递、权限拒绝和 subscription 失效清理。
-3. 继续将 `Chat.tsx` 拆为会话、消息、详情、Socket 等 hooks，并为已抽出的通知 hook 补组件级测试。
+3. 继续将 `Chat.tsx` 拆为会话、消息、详情等 hooks，并为已抽出的通知与 Socket hook 补组件级测试。
 4. 规划 Redis adapter、对象存储和消息队列接入。
 5. 将 `Chat.tsx` 拆分后的 hooks 接入组件测试。
 
