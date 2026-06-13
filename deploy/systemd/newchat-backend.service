@@ -1,0 +1,18 @@
+[Unit]
+Description=Newchat Nest backend on 127.0.0.1:3101
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/root/.openclaw/workspace/chat-app/src/backend
+EnvironmentFile=-/root/.openclaw/workspace/chat-app/src/backend/.env
+Environment=PORT=3101
+ExecStart=/root/.nvm/versions/node/v22.22.0/bin/node /root/.openclaw/workspace/chat-app/src/backend/dist/src/main.js
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

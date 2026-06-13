@@ -9,7 +9,7 @@ NewChat 是一个面向即时通讯场景的 Web 聊天应用，目标体验参�
 - 后端：`/root/.openclaw/workspace/chat-app/src/backend`
 - 前端：`/root/.openclaw/workspace/chat-app/src/frontend`
 
-本文档以当前 `chat-app` 源码为基线，描述目标架构和后续演进方案。
+本文档以当前 `chat-app` 源码为基线，描述目标架构和后续演进方案。当前线上 systemd/Nginx 模板与重启流程已固化在 `docs/deployment.md` 和 `deploy/` 目录。
 
 ## 2. 架构目标
 
@@ -513,7 +513,7 @@ Data
 
 ## 14. 当前风险
 
-- `newchat` 目录与实际运行目录不一致，容易导致部署和维护误操作。
+- `newchat` 目录与实际运行目录不一致，容易导致部署和维护误操作；当前已用 `docs/deployment.md` 与 `deploy/` 模板记录线上目录、端口和服务入口。
 - `.env`、`dist`、`node_modules`、备份文件出现在工作区，版本管理边界不清。
 - 生产环境已强制校验 `JWT_SECRET` 和 `CORS_ORIGINS`；部署时必须提供真实密钥和前端域名。
 - 自动化测试已覆盖核心 REST 流程、Socket 实时事件、多设备在线状态和 Web Push 注册降级；真实浏览器 Push 投递仍需要端到端环境验证。
@@ -524,7 +524,7 @@ Data
 
 优先顺序：
 
-1. 清理工程边界，统一 `newchat` 与 `chat-app` 的部署目录关系。
+1. 继续清理工程边界，将 `newchat` 与 `chat-app` 的命名和部署目录关系从文档约束推进到目录/服务统一。
 2. 在真实浏览器环境验证 Web Push 投递、权限拒绝和 subscription 失效清理。
 3. 在已建立的 Vitest + Testing Library 基线上，继续为 Socket、详情等 hook 补测试。
 4. 规划 Redis adapter、对象存储和消息队列接入。
